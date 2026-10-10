@@ -36,6 +36,8 @@
     stopsByKey: new Map(),
     vehicles: new Map(),
     tramCompositions: [],
+    expectedModelRules: [],
+    depotRules: [],
     socket: null,
     socketGeneration: 0,
     reconnectTimer: null,
@@ -1352,7 +1354,42 @@
         background: #1e293b;
       }
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-card { background: #172438; }
+      .gts-vehicle-leaflet-popup .vehicle-unexpected-warning {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        padding: 9px 10px;
+        border: 1px solid #f1d16b;
+        border-radius: 10px;
+        background: #fff7d6;
+        color: #805b08;
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.25;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-icon {
+        display: inline-grid;
+        place-items: center;
+        flex: 0 0 20px;
+        width: 20px;
+        height: 20px;
+        border-radius: 7px;
+        background: #ffec9e;
+        color: #805b08;
+        font-size: 13px;
+      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-unexpected-warning {
+        border-color: #7d6726;
+        background: #3b3218;
+        color: #fde68a;
+      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-icon {
+        background: #554519;
+        color: #fde68a;
+      }
       @media (max-width: 480px) {
+        .gts-vehicle-leaflet-popup .vehicle-unexpected-warning { padding: 8px 9px; font-size: 10px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-card { gap: 7px; padding: 2px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-card-head { gap: 5px; padding-bottom: 8px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon,
@@ -1469,6 +1506,26 @@
         }
       } catch (error) {
         console.warn('Не успяхме да заредим справочника за трамвайни композиции.', error);
+      }
+
+      // Optional expected-vehicle metadata from the reference project. If unavailable,
+      // the map stays operational and only the unexpected-vehicle warning is omitted.
+      try {
+        const [expectedResponse, depotResponse] = await Promise.all([
+          fetch('./data/expected-models.json', { cache: 'no-cache' }),
+          fetch('./data/depot-rules.json', { cache: 'no-cache' })
+        ]);
+        if (!expectedResponse.ok || !depotResponse.ok) throw new Error('Expected-model metadata is unavailable');
+        const [expectedData, depotData] = await Promise.all([expectedResponse.json(), depotResponse.json()]);
+        if (!Array.isArray(expectedData.rules) || !Array.isArray(depotData.depots)) {
+          throw new Error('Invalid expected-model metadata');
+        }
+        state.expectedModelRules = expectedData.rules;
+        state.depotRules = depotData.depots;
+      } catch (error) {
+        state.expectedModelRules = [];
+        state.depotRules = [];
+        console.warn('Не успяхме да заредим правилата за необичайни превозни средства.', error);
       }
 
       state.stops = (data.stops || []).map((stop) => ({
@@ -1665,6 +1722,79 @@
     return text || '—';
   }
 
+  function depotForExpectedVehicle(vehicle, inventoryValue) {
+    const inventoryText = cleanValue(inventoryValue);
+    if (!inventoryText) return null;
+    const inventoryNumber = Number(inventoryText.split('/')[0]);
+    if (!Number.isFinite(inventoryNumber)) return null;
+    const cgmId = String(vehicle.cgmId ?? vehicle.raw?.cgm_id ?? '');
+
+    for (const depot of state.depotRules) {
+      const typeMatches = typeof depot.type === 'string'
+        ? depot.type === vehicle.type
+        : Array.isArray(depot.type) && depot.type.includes(vehicle.type);
+      if (!typeMatches) continue;
+      if (depot.cgm_id_prefix && !cgmId.startsWith(depot.cgm_id_prefix)) continue;
+
+      for (const rawRange of depot.inv_number_ranges || []) {
+        let range = rawRange;
+        if (Array.isArray(rawRange) && typeof rawRange[0] === 'string' && rawRange[0] === vehicle.type) {
+          range = rawRange[1];
+        }
+        if (Array.isArray(range)) {
+          const lower = Number(range[0]);
+          const upper = Number(range[1]);
+          if (Number.isFinite(lower) && Number.isFinite(upper) && lower <= inventoryNumber && inventoryNumber <= upper) {
+            return depot;
+          }
+        } else if (Number(range) === inventoryNumber) {
+          return depot;
+        }
+      }
+    }
+    return null;
+  }
+
+  function isVehicleExpectedOnLine(vehicle) {
+    if (!state.expectedModelRules.length || !state.depotRules.length) return true;
+    const lineRef = normaliseRef(vehicle.routeRef);
+    const line = state.expectedModelRules.find((rule) =>
+      rule.type === vehicle.type && normaliseRef(rule.route_ref) === lineRef
+    );
+    // Lines without a published expectation are not flagged.
+    if (!line) return true;
+
+    const inventory = cleanValue(vehicle.shortInventory || vehicle.inventory);
+    const modelApi = window.GTSOFIA_VEHICLE_MODELS;
+    if (!inventory || !modelApi?.get_vehicle_model) return true;
+
+    let model;
+    try {
+      model = modelApi.get_vehicle_model({
+        type: vehicle.type,
+        inv_number: inventory,
+        cgm_id: String(vehicle.cgmId ?? vehicle.raw?.cgm_id ?? '')
+      });
+    } catch (error) {
+      console.warn('Не успяхме да определим модела при проверката на линията.', error);
+      return true;
+    }
+    const depot = depotForExpectedVehicle(vehicle, inventory);
+    // Avoid a false warning when the model or depot cannot be identified.
+    if (!model || !depot) return true;
+
+    const carriages = inventory.includes('/') ? inventory.split('/').length : 1;
+    return (line.models || []).some((expected) => {
+      if (expected.model_id) {
+        const expectedCarriages = expected.expected_carriages ?? expected.carriages;
+        return expected.model_id === model.id &&
+          expected.depot_id === depot.id &&
+          (expectedCarriages === undefined || Number(expectedCarriages) === carriages);
+      }
+      return expected.depot_id === depot.id &&
+        expected.is_bendy === (model.is_bendy ?? false);
+    });
+  }
   function vehiclePopup(vehicle) {
     const line = vehicle.routeRef || '—';
     const destination = resolveVehicleDestination(vehicle);
@@ -1673,6 +1803,7 @@
     const delay = delayView(vehicle);
     const model = vehicle.modelName || 'Моделът не е разпознат';
     const inventory = displayInventoryNumber(vehicle.inventory || vehicle.shortInventory);
+    const isUnexpected = !isVehicleExpectedOnLine(vehicle);
     return `<div class="vehicle-popup-card" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
       <div class="vehicle-popup-card-head">
         <div class="vehicle-popup-route">${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}
@@ -1692,6 +1823,7 @@
         <span class="vehicle-popup-card-label">Марка / модел</span>
         <strong>${escapeHTML(model)}</strong>
       </div>
+      ${isUnexpected ? `<div class="vehicle-unexpected-warning" role="note"><span class="vehicle-unexpected-warning-icon" aria-hidden="true">⚠</span><span>Необичайно превозно средство</span></div>` : ''}
       <div class="vehicle-popup-metrics">
         <div class="vehicle-popup-metric"><span>Скорост</span><strong>${escapeHTML(speed)}</strong></div>
         <div class="vehicle-popup-metric ${escapeHTML(delay.className || '')}"><span>Закъснение</span><strong>${escapeHTML(delay.label)}</strong></div>
