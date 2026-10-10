@@ -47,6 +47,7 @@
     renderFrame: null,
     vehicleAnimationFrame: null,
     selectedVehicleId: null,
+    selectedVehicleRouteSignature: null,
     toastTimer: null
   };
 
@@ -262,6 +263,8 @@
     const hasRouteRefField = hasOwnAny(raw, routeRefFields) || hasOwnAny(raw.route, ['route_short_name']);
     const hasDestinationStopField = hasOwnAny(raw, destinationStopFields);
     const hasNextStopField = hasOwnAny(raw, nextStopFields);
+    const directionIdFields = ['direction_id', 'directionId', 'direction_key', 'directionKey', 'route_direction_id', 'routeDirectionId'];
+    const hasDirectionIdField = hasOwnAny(raw, directionIdFields) || /^D\d+$/i.test(cleanValue(raw.direction));
     const hasDestinationField = hasOwnAny(raw, destinationFields) || (Object.prototype.hasOwnProperty.call(raw, 'direction') && !/^D\d+$/i.test(cleanValue(raw.direction)));
     const idBasedInventory = /^\d{3,6}$/.test(rawId) ? rawId : null;
     const override = getOverride(routeId);
@@ -283,7 +286,6 @@
     const speed = hasFinite(speedVal) ? Number(speedVal) : null;
     const timestampRaw = raw.timestamp ?? raw.updated_at ?? raw.updatedAt ?? raw.time ?? raw.last_update ?? raw.lastUpdate;
     const parsedTimestamp = timestampSeconds(timestampRaw);
-    if (parsedTimestamp === null) return null;
     const timestamp = parsedTimestamp;
     const normalizedRef = normaliseRef(ref);
     const color = normalizedRef ? routeColor(route, normalizedRef, type) : (TYPE_COLORS[type] || TYPE_COLORS.other);
@@ -339,6 +341,7 @@
       hasDestinationStopField,
       hasNextStopField,
       hasDestinationField,
+      hasDirectionIdField,
       lastSeenAt: Date.now(),
       marker: null,
       raw
@@ -458,10 +461,11 @@
       if (previous.color) merged.color = previous.color;
     }
 
-    if (!cleanValue(incoming.nextStopRef)) merged.nextStopRef = previous.nextStopRef;
-    if (!cleanValue(incoming.destinationStopRef)) merged.destinationStopRef = previous.destinationStopRef;
-    if (!cleanValue(incoming.destination)) merged.destination = previous.destination;
-    if (!cleanValue(incoming.directionId)) merged.directionId = previous.directionId;
+    // Preserve fields omitted by a partial snapshot, but respect explicit empty values.
+    if (!incoming.hasNextStopField) merged.nextStopRef = previous.nextStopRef;
+    if (!incoming.hasDestinationStopField) merged.destinationStopRef = previous.destinationStopRef;
+    if (!incoming.hasDestinationField) merged.destination = previous.destination;
+    if (!incoming.hasDirectionIdField) merged.directionId = previous.directionId;
 
     // Partial feed messages can omit type/model. Do not erase resolved metadata
     // unless the vehicle's identity genuinely changed.
@@ -591,10 +595,18 @@
       });
     };
     tryAddRoute(direct);
-    sameRef.filter((route) => routeType(route) === vehicle.type || routeType(route) === 'other').forEach(tryAddRoute);
+    // If the live feed does not identify the mode, consider all routes with this
+    // public line number; position, destination and terminal-stop evidence below
+    // can still disambiguate the correct route and geometry.
+    const routeOptions = vehicle.type === 'other'
+      ? sameRef
+      : sameRef.filter((route) => routeType(route) === vehicle.type || routeType(route) === 'other');
+    routeOptions.forEach(tryAddRoute);
     if (!candidates.length) return null;
 
-    const dirToken = normaliseRef(vehicle.directionId);
+    // A retained direction ID is only strong evidence while the current snapshot
+    // actually supplied that field; otherwise use fresh destination/position cues.
+    const dirToken = vehicle.hasDirectionIdField ? normaliseRef(vehicle.directionId) : '';
     const destinationText = normaliseDirectionText(vehicle.destination);
     const destinationRef = cleanValue(vehicle.destinationStopRef);
     let best = null;
@@ -606,7 +618,7 @@
 
       // Some live sources send direction keys such as D1/D2. Only trust exact
       // key matches; plain numeric values are ambiguous between source schemas.
-      if (dirToken && normaliseRef(key) === dirToken) score -= 100000;
+      if (dirToken && normaliseRef(key) === dirToken) score -= 15000;
 
       const heading = normaliseDirectionText(direction.destination || direction.headsign);
       if (destinationText && heading) {
@@ -1079,7 +1091,7 @@
 
   async function loadMapData() {
     try {
-      const response = await fetch('./data/transport-map.json', { cache: 'force-cache' });
+      const response = await fetch('./data/transport-map.json', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       state.data = data;
@@ -1105,7 +1117,7 @@
       });
       // Bundle the exact route catalog used by Dimitar to avoid a cross-origin
       // lookup silently failing when the live map starts.
-      const routeCatalogResponse = await fetch('./data/route-catalog.json', { cache: 'force-cache' });
+      const routeCatalogResponse = await fetch('./data/route-catalog.json', { cache: 'no-cache' });
       if (!routeCatalogResponse.ok) throw new Error(`HTTP ${routeCatalogResponse.status} loading route catalog`);
       const routeCatalog = await routeCatalogResponse.json();
       state.routesByCgmId = new Map(routeCatalog
@@ -1126,7 +1138,7 @@
       });
 
       // Use the same Bulgarian stop names as Dimitar's destination-stop lookup.
-      const stopCatalogResponse = await fetch('./data/stop-catalog.json', { cache: 'force-cache' });
+      const stopCatalogResponse = await fetch('./data/stop-catalog.json', { cache: 'no-cache' });
       if (!stopCatalogResponse.ok) throw new Error(`HTTP ${stopCatalogResponse.status} loading stop catalog`);
       const stopCatalog = await stopCatalogResponse.json();
       for (const item of stopCatalog) {
@@ -1319,7 +1331,10 @@
         const isNarrowViewport = (window.innerWidth || 1024) <= 480;
         const availableWidth = Math.max(220, (window.innerWidth || 1024) - 24);
         const availableHeight = Math.max(200, (window.innerHeight || 768) - 40);
-        vehicle.marker.bindPopup(() => vehiclePopup(vehicle), {
+        vehicle.marker.bindPopup(() => {
+          const currentVehicle = state.vehicles.get(String(id)) || vehicle;
+          return vehiclePopup(currentVehicle);
+        }, {
           closeButton: true,
           maxWidth: Math.min(isNarrowViewport ? 270 : 300, availableWidth),
           minWidth: Math.min(isNarrowViewport ? 260 : 290, availableWidth),
@@ -1332,17 +1347,19 @@
           className: 'gts-vehicle-leaflet-popup'
         });
         vehicle.marker.on('click', () => {
-          state.selectedVehicleId = id;
-          renderSelectedVehicleRoute(vehicle);
+          const currentVehicle = state.vehicles.get(String(id)) || vehicle;
+          state.selectedVehicleId = String(id);
+          renderSelectedVehicleRoute(currentVehicle, true);
         });
         vehicle.marker.on('popupopen', () => {
-          vehicle._popupHTML = vehiclePopup(vehicle);
-          vehicle._lastPopupRefreshAt = Date.now();
+          const currentVehicle = state.vehicles.get(String(id)) || vehicle;
+          currentVehicle._popupHTML = vehiclePopup(currentVehicle);
+          currentVehicle._lastPopupRefreshAt = Date.now();
         });
         vehicle.marker.on('popupclose', () => {
-          if (state.selectedVehicleId === id) {
+          if (String(state.selectedVehicleId) === String(id)) {
             state.selectedVehicleId = null;
-            state.selectedVehicleRouteLayer?.clearLayers();
+            clearSelectedVehicleRoute();
           }
         });
         vehicle._iconSignature = vehicleIconSignature(vehicle);
@@ -1379,20 +1396,42 @@
     return [vehicle.routeRef, vehicle.type, getVehicleColor(vehicle), vehicle.bearing, ageMinutes >= 1 ? 'inactive' : 'fresh'].join('|');
   }
 
-  function renderSelectedVehicleRoute(vehicle) {
+  function clearSelectedVehicleRoute() {
+    state.selectedVehicleRouteLayer?.clearLayers();
+    state.selectedVehicleRouteSignature = null;
+  }
+
+  function renderSelectedVehicleRoute(vehicle, notifyMissing = true) {
     if (!state.selectedVehicleRouteLayer || !state.data || !vehicle) return;
-    state.selectedVehicleRouteLayer.clearLayers();
-    const selected = getVehicleRouteDirection(vehicle);
+    const currentVehicle = state.vehicles.get(String(vehicle.id)) || vehicle;
+    const selected = getVehicleRouteDirection(currentVehicle);
     const shape = selected?.shape;
+    const color = getVehicleColor(currentVehicle);
     if (!Array.isArray(shape) || shape.length < 2) {
-      showToast('Не намерих геометрия за текущото направление на превозното средство.');
+      // Never leave a stale geometry visible after its direction can no longer be resolved.
+      const missingSignature = ['missing', currentVehicle.id, currentVehicle.normalizedRef,
+        currentVehicle.type, currentVehicle.directionId, currentVehicle.destinationStopRef,
+        currentVehicle.destination].join('|');
+      if (state.selectedVehicleRouteSignature !== missingSignature) {
+        state.selectedVehicleRouteLayer.clearLayers();
+        state.selectedVehicleRouteSignature = missingSignature;
+      }
+      if (notifyMissing) showToast('Не намерих геометрия за текущото направление на превозното средство.');
       return;
     }
+    const signature = [currentVehicle.id, selected.route?.route_id, selected.key,
+      selected.direction?.shape_id, color].join('|');
+    if (signature === state.selectedVehicleRouteSignature) return;
     const points = shape.map((point) => [Number(point.lat), Number(point.lon)])
       .filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon));
-    if (points.length < 2) return;
+    state.selectedVehicleRouteLayer.clearLayers();
+    if (points.length < 2) {
+      state.selectedVehicleRouteSignature = `invalid|${signature}`;
+      if (notifyMissing) showToast('Не намерих геометрия за текущото направление на превозното средство.');
+      return;
+    }
     L.polyline(points, {
-      color: getVehicleColor(vehicle),
+      color,
       weight: 5,
       opacity: 1,
       fillOpacity: 0,
@@ -1401,8 +1440,20 @@
       interactive: false,
       className: 'selected-vehicle-route'
     }).addTo(state.selectedVehicleRouteLayer);
+    state.selectedVehicleRouteSignature = signature;
     // Keep map framing unchanged so the line does not pull the selected vehicle away
     // from the user's current view. Only one direction is ever drawn for this vehicle.
+  }
+
+  function refreshSelectedVehicleRoute() {
+    if (state.selectedVehicleId === null || state.selectedVehicleId === undefined) return;
+    const vehicle = state.vehicles.get(String(state.selectedVehicleId));
+    if (!vehicle || !isVehicleFresh(vehicle)) {
+      state.selectedVehicleId = null;
+      clearSelectedVehicleRoute();
+      return;
+    }
+    renderSelectedVehicleRoute(vehicle, false);
   }
 
   function renderRoute(fit = false) {
@@ -1484,12 +1535,33 @@
       const incoming = normaliseVehicle(raw);
       if (!incoming) continue;
       const previous = state.vehicles.get(incoming.id);
+      // Do not create a new marker from an untimestamped record, but permit a
+      // partial update for a vehicle already known from a timestamped snapshot.
+      if (!incoming.hasSourceTimestamp && !previous) continue;
       // A stale source timestamp is authoritative: do not refresh an old vehicle
       // just because the proxy keeps repeating that same old record.
       if (incoming.hasSourceTimestamp && nowSeconds - incoming.timestamp > STALE_AFTER_SECONDS) {
         continue;
       }
-      const vehicle = mergeVehicleSnapshot(previous, incoming, now);
+      let vehicle = mergeVehicleSnapshot(previous, incoming, now);
+      // If the feed omits vehicle mode but the line is known, infer it from the
+      // best-matching GTFS direction instead of leaving the marker as "other".
+      if (vehicle.type === 'other' && vehicle.normalizedRef && state.data) {
+        const matchedDirection = getVehicleRouteDirection(vehicle);
+        const inferredType = matchedDirection ? routeType(matchedDirection.route) : 'other';
+        if (['bus', 'tram', 'trolley'].includes(inferredType)) {
+          const inferredRef = vehicle.routeRef || routeRef(matchedDirection.route);
+          vehicle = {
+            ...vehicle,
+            type: inferredType,
+            gtfsRouteId: vehicle.gtfsRouteId || String(matchedDirection.route.route_id || ''),
+            routeRef: inferredRef,
+            normalizedRef: normaliseRef(inferredRef),
+            color: routeColor(matchedDirection.route, inferredRef, inferredType)
+          };
+          vehicle.marker = previous?.marker || vehicle.marker;
+        }
+      }
       state.vehicles.set(vehicle.id, vehicle);
     }
     state.lastSnapshotAt = now;
@@ -1510,6 +1582,7 @@
       updateLastUpdated();
       updateStats();
       updateVehicleMarkers();
+      refreshSelectedVehicleRoute();
       // The filter-only sidebar intentionally contains no vehicle list.
       renderVehicleList();
     });
@@ -1609,14 +1682,14 @@
   function bindUI() {
     $('search-input')?.addEventListener('input', (event) => {
       state.query = event.target.value;
-      state.selectedVehicleRouteLayer?.clearLayers();
+      clearSelectedVehicleRoute();
       state.selectedVehicleId = null;
       updateVehicleMarkers();
       renderVehicleList();
     });
     $('type-filter')?.addEventListener('change', (event) => {
       state.selectedType = event.target.value;
-      state.selectedVehicleRouteLayer?.clearLayers();
+      clearSelectedVehicleRoute();
       state.selectedVehicleId = null;
       updateVehicleMarkers();
       renderVehicleList();
@@ -1624,7 +1697,7 @@
     $('line-filter')?.addEventListener('change', (event) => {
       state.selectedRoute = event.target.value;
       state.routeLayer?.clearLayers();
-      state.selectedVehicleRouteLayer?.clearLayers();
+      clearSelectedVehicleRoute();
       state.selectedVehicleId = null;
       renderStops();
       updateVehicleMarkers();
@@ -1637,7 +1710,7 @@
       if ($('type-filter')) $('type-filter').value = 'all';
       if ($('line-filter')) $('line-filter').value = 'all';
       if ($('search-input')) $('search-input').value = '';
-      state.selectedVehicleRouteLayer?.clearLayers();
+      clearSelectedVehicleRoute();
       state.selectedVehicleId = null;
       state.routeLayer?.clearLayers();
       renderRoute();
@@ -1693,7 +1766,7 @@
       for (const [id, vehicle] of state.vehicles.entries()) {
         if (isVehicleFresh(vehicle, nowSeconds)) continue;
         if (vehicle.marker && state.vehicleLayer?.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
-        if (state.selectedVehicleId === id) { state.selectedVehicleId = null; state.selectedVehicleRouteLayer?.clearLayers(); }
+        if (state.selectedVehicleId === id) { state.selectedVehicleId = null; clearSelectedVehicleRoute(); }
         state.vehicles.delete(id);
         removed = true;
       }
