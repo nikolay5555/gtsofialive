@@ -8,7 +8,7 @@
   const STALE_AFTER_SECONDS = STALE_AFTER / 1000;
   const RECONNECT_DELAY = CONFIG.reconnectDelayMs || 2500;
   const TYPE_NAMES = { bus: 'Автобус', tram: 'Трамвай', trolley: 'Тролей', metro: 'Метро', other: 'Транспорт' };
-  const TYPE_COLORS = { bus: '#be1e2d', tram: '#d97706', trolley: '#2563eb', metro: '#7c3aed', other: '#111827' };
+  const TYPE_COLORS = { bus: '#BE1E2D', tram: '#F7941D', trolley: '#27AAE1', metro: '#1C75BC', other: '#111827' };
   const FAKE_TROLLEY_ROUTES = new Set(['60', '73', '74', '123', '288', '801']);
 
   const state = {
@@ -44,6 +44,7 @@
     userMarker: null,
     lastSnapshotAt: null,
     renderFrame: null,
+    vehicleAnimationFrame: null,
     selectedVehicleId: null,
     toastTimer: null
   };
@@ -56,6 +57,14 @@
     const text = String(value).trim();
     return /^(null|undefined|n\/a)$/i.test(text) ? '' : text;
   };
+  const firstClean = (...values) => {
+    for (const value of values) {
+      const cleaned = cleanValue(value);
+      if (cleaned) return cleaned;
+    }
+    return '';
+  };
+  const hasOwnAny = (object, keys) => keys.some((key) => Object.prototype.hasOwnProperty.call(object || {}, key));
   const lineOverrides = () => state.data?.lineOverrides || [];
   const getOverride = (routeId) => state.overridesByCgmId.get(String(routeId ?? '')) || null;
 
@@ -107,7 +116,7 @@
   }
 
   function routeForVehicle(raw) {
-    const routeId = cleanValue(raw.cgm_route_id ?? raw.cgmRouteId ?? raw.route_id ?? raw.routeId ?? raw.route?.route_id ?? '');
+    const routeId = firstClean(raw.cgm_route_id, raw.cgmRouteId, raw.route_id, raw.routeId, raw.route?.route_id);
     const byId = state.routesById.get(routeId);
     if (byId) return byId;
     const override = getOverride(routeId);
@@ -115,7 +124,7 @@
       const options = state.routesByRef.get(normaliseRef(override.route_ref));
       if (options?.length) return options[0];
     }
-    const ref = normaliseRef(raw.route_ref ?? raw.routeRef ?? raw.route_short_name ?? raw.routeShortName ?? raw.line ?? raw.line_number ?? raw.lineNumber ?? raw.route?.route_short_name ?? '');
+    const ref = normaliseRef(firstClean(raw.route_ref, raw.routeRef, raw.route_short_name, raw.routeShortName, raw.line, raw.line_number, raw.lineNumber, raw.route?.route_short_name));
     const byRef = state.routesByRef.get(ref);
     if (byRef?.length) return byRef[0];
     // Feeds sometimes report the public CGM route ID but do not include route_ref.
@@ -138,11 +147,11 @@
   }
 
   function normaliseType(rawType, ref, route, raw = {}) {
-    const candidate = cleanValue(rawType ?? raw.vehicle_type ?? raw.vehicleType ?? raw.transport_type ?? raw.transportType ?? raw.category ?? raw.route_type ?? raw.routeType).toLowerCase();
-    const routeId = cleanValue(raw.cgm_route_id ?? raw.cgmRouteId ?? raw.route_id ?? raw.routeId ?? raw.route?.route_id ?? '');
+    const candidate = firstClean(rawType, raw.vehicle_type, raw.vehicleType, raw.transport_type, raw.transportType, raw.category, raw.route_type, raw.routeType).toLowerCase();
+    const routeId = firstClean(raw.cgm_route_id, raw.cgmRouteId, raw.route_id, raw.routeId, raw.route?.route_id);
     const override = getOverride(routeId) || state.overridesByRouteRef?.get(normaliseRef(ref));
     const refUpper = cleanValue(ref).toUpperCase();
-    const inventoryValue = raw.inv_number ?? raw.inventory_number ?? raw.full_inv_number ?? raw.inventoryNumber ?? '';
+    const inventoryValue = firstClean(raw.inv_number, raw.inventory_number, raw.full_inv_number, raw.inventoryNumber);
     const inventoryNumber = Number.parseInt(String(inventoryValue).split(/[+/]/)[0], 10);
     let type = 'other';
 
@@ -198,16 +207,26 @@
 
   function normaliseVehicle(raw) {
     if (!raw || typeof raw !== 'object') return null;
-    const coords = toCoordinates(raw.coords ?? raw.coordinates ?? raw.position ?? raw.location ?? (raw.lat !== undefined ? { lat: raw.lat, lon: raw.lon ?? raw.lng } : null));
+    const coords = [raw.coords, raw.coordinates, raw.position, raw.location,
+      raw.lat !== undefined ? { lat: raw.lat, lon: raw.lon ?? raw.lng ?? raw.longitude } : null]
+      .map(toCoordinates).find(Boolean) || null;
     if (!coords || Math.abs(coords[0]) > 90 || Math.abs(coords[1]) > 180) return null;
 
     const route = routeForVehicle(raw);
-    const routeId = cleanValue(raw.cgm_route_id ?? raw.cgmRouteId ?? raw.route_id ?? raw.routeId ?? raw.route?.route_id ?? '');
-    const rawId = raw.cgm_id ?? raw.vehicle_id ?? raw.vehicleId ?? raw.id ?? raw.inv_number ?? raw.inventory_number ?? raw.full_inv_number;
-    if (rawId === undefined || rawId === null || cleanValue(rawId) === '') return null;
-    const idBasedInventory = /^\d{3,6}$/.test(cleanValue(rawId)) ? cleanValue(rawId) : null;
+    const routeId = firstClean(raw.cgm_route_id, raw.cgmRouteId, raw.route_id, raw.routeId, raw.route?.route_id);
+    const rawId = firstClean(raw.cgm_id, raw.vehicle_id, raw.vehicleId, raw.id, raw.inv_number, raw.inventory_number, raw.full_inv_number);
+    if (!rawId) return null;
+    const routeIdFields = ['cgm_route_id', 'cgmRouteId', 'route_id', 'routeId'];
+    const routeRefFields = ['route_ref', 'routeRef', 'route_short_name', 'routeShortName', 'line', 'line_number', 'lineNumber'];
+    const nextStopFields = ['destination_stop', 'destinationStop', 'next_stop', 'nextStop', 'destination_stop_code', 'destinationStopCode', 'stop_code', 'stopCode'];
+    const destinationFields = ['trip_headsign', 'tripHeadsign', 'destination', 'headsign'];
+    const hasRouteIdField = hasOwnAny(raw, routeIdFields) || hasOwnAny(raw.route, ['route_id']);
+    const hasRouteRefField = hasOwnAny(raw, routeRefFields) || hasOwnAny(raw.route, ['route_short_name']);
+    const hasNextStopField = hasOwnAny(raw, nextStopFields);
+    const hasDestinationField = hasOwnAny(raw, destinationFields) || (Object.prototype.hasOwnProperty.call(raw, 'direction') && !/^D\d+$/i.test(cleanValue(raw.direction)));
+    const idBasedInventory = /^\d{3,6}$/.test(rawId) ? rawId : null;
     const override = getOverride(routeId);
-    const explicitRef = cleanValue(raw.route_ref ?? raw.routeRef ?? raw.route_short_name ?? raw.routeShortName ?? raw.line ?? raw.line_number ?? raw.lineNumber ?? raw.route?.route_short_name);
+    const explicitRef = firstClean(raw.route_ref, raw.routeRef, raw.route_short_name, raw.routeShortName, raw.line, raw.line_number, raw.lineNumber, raw.route?.route_short_name);
     let ref = explicitRef || cleanValue(routeRef(route)) || cleanValue(override?.route_ref);
     if (!ref && routeId) {
       const fallbackRoute = state.routesById.get(routeId);
@@ -216,8 +235,8 @@
     let type = normaliseType(raw.type ?? raw.vehicle_type ?? raw.vehicleType ?? raw.transport_type ?? raw.transportType ?? raw.route_type ?? raw.routeType, ref, route, raw);
     if (type === 'other' && window.GTSOFIA_VEHICLE_MODELS?.get_vehicle_type_by_inventory) {
       const guessedType = window.GTSOFIA_VEHICLE_MODELS.get_vehicle_type_by_inventory({
-        inv_number: raw.inv_number ?? raw.inventory_number ?? raw.inventoryNumber ?? raw.full_inv_number ?? raw.fullInventoryNumber ?? idBasedInventory,
-        cgm_id: String(raw.cgm_id ?? raw.vehicle_id ?? raw.id ?? '')
+        inv_number: firstClean(raw.inv_number, raw.inventory_number, raw.inventoryNumber, raw.full_inv_number, raw.fullInventoryNumber, idBasedInventory),
+        cgm_id: firstClean(raw.cgm_id, raw.vehicle_id, raw.vehicleId, raw.id, rawId)
       });
       if (guessedType) type = guessedType;
     }
@@ -227,19 +246,22 @@
     const parsedTimestamp = timestampSeconds(timestampRaw);
     const timestamp = parsedTimestamp ?? Date.now() / 1000;
     const normalizedRef = normaliseRef(ref);
-    const color = routeColor(route, normalizedRef, type);
-    const inventoryRaw = raw.full_inv_number ?? raw.fullInventoryNumber ?? raw.inv_number ?? raw.inventory_number ?? raw.inventoryNumber ?? idBasedInventory;
+    const color = normalizedRef ? routeColor(route, normalizedRef, type) : (TYPE_COLORS[type] || TYPE_COLORS.other);
+    const inventoryRaw = firstClean(raw.full_inv_number, raw.fullInventoryNumber, raw.inv_number, raw.inventory_number, raw.inventoryNumber, idBasedInventory);
     const inventory = inventoryRaw === null || inventoryRaw === undefined || cleanValue(inventoryRaw) === '' ? null : String(inventoryRaw);
-    const shortInventoryRaw = raw.inv_number ?? raw.inventory_number ?? raw.inventoryNumber ?? raw.full_inv_number ?? raw.fullInventoryNumber ?? idBasedInventory;
+    const shortInventoryRaw = firstClean(raw.inv_number, raw.inventory_number, raw.inventoryNumber, raw.full_inv_number, raw.fullInventoryNumber, idBasedInventory);
     const shortInventory = shortInventoryRaw === null || shortInventoryRaw === undefined || cleanValue(shortInventoryRaw) === '' ? null : String(shortInventoryRaw);
-    const rawNextStop = raw.destination_stop ?? raw.destinationStop ?? raw.next_stop ?? raw.nextStop ?? raw.destination_stop_code ?? raw.destinationStopCode ?? raw.stop_code ?? raw.stopCode ?? null;
-    const destinationText = raw.trip_headsign ?? raw.tripHeadsign ?? raw.destination ?? raw.headsign ?? raw.direction ?? '';
-    const rawDirectionId = raw.direction_id ?? raw.directionId ?? raw.direction_key ?? raw.directionKey ?? raw.route_direction_id ?? raw.routeDirectionId ?? '';
+    const rawNextStop = firstClean(raw.destination_stop, raw.destinationStop, raw.next_stop, raw.nextStop, raw.destination_stop_code, raw.destinationStopCode, raw.stop_code, raw.stopCode) || null;
+    const directDirectionText = cleanValue(raw.direction);
+    const destinationText = firstClean(raw.trip_headsign, raw.tripHeadsign, raw.destination, raw.headsign,
+      (/^D\d+$/i.test(directDirectionText) ? '' : directDirectionText));
+    const rawDirectionId = firstClean(raw.direction_id, raw.directionId, raw.direction_key, raw.directionKey, raw.route_direction_id, raw.routeDirectionId,
+      /^D\d+$/i.test(directDirectionText) ? directDirectionText : '');
     let modelName = null;
     const modelApi = window.GTSOFIA_VEHICLE_MODELS;
     if (modelApi && shortInventory && ['bus', 'tram', 'trolley'].includes(type)) {
       try {
-        modelName = modelApi.get_vehicle_model_name({ type, inv_number: shortInventory, cgm_id: String(raw.cgm_id ?? rawId) }) || null;
+        modelName = modelApi.get_vehicle_model_name({ type, inv_number: shortInventory, cgm_id: firstClean(raw.cgm_id, raw.vehicle_id, raw.vehicleId, raw.id, rawId) }) || null;
         if (modelName === 'Неизвестен модел') modelName = null;
       } catch (error) {
         console.warn('Не успяхме да определим модела на превозното средство:', error);
@@ -248,7 +270,7 @@
 
     return {
       id: String(rawId),
-      cgmId: String(raw.cgm_id ?? rawId),
+      cgmId: firstClean(raw.cgm_id, raw.vehicle_id, raw.vehicleId, raw.id, rawId),
       routeId,
       routeRef: ref,
       normalizedRef,
@@ -269,10 +291,79 @@
       bearing: hasFinite(raw.bearing) ? Number(raw.bearing) : null,
       color,
       modelName,
+      hasRouteIdField,
+      hasRouteRefField,
+      hasNextStopField,
+      hasDestinationField,
       lastSeenAt: Date.now(),
       marker: null,
       raw
     };
+  }
+
+  function distanceMetersBetween(a, b) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return Infinity;
+    const rad = Math.PI / 180;
+    const lat1 = Number(a[0]) * rad;
+    const lat2 = Number(b[0]) * rad;
+    const dLat = (Number(b[0]) - Number(a[0])) * rad;
+    const dLon = (Number(b[1]) - Number(a[1])) * rad;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+    return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h)));
+  }
+
+  function vehicleDisplayCoords(vehicle, now = Date.now()) {
+    const target = vehicle?.motionTo || vehicle?.coords;
+    const from = vehicle?.motionFrom || vehicle?.displayCoords || target;
+    if (!Array.isArray(target) || !Array.isArray(from)) return target || from || [0, 0];
+    const duration = Number(vehicle.motionDuration) || 0;
+    if (duration <= 0) return [Number(target[0]), Number(target[1])];
+    const progress = Math.max(0, Math.min(1, (now - Number(vehicle.motionStartedAt || now)) / duration));
+    // Smoothstep interpolation removes abrupt starts/stops between live snapshots.
+    const eased = progress * progress * (3 - 2 * progress);
+    return [
+      Number(from[0]) + (Number(target[0]) - Number(from[0])) * eased,
+      Number(from[1]) + (Number(target[1]) - Number(from[1])) * eased
+    ];
+  }
+
+  function scheduleVehicleAnimation() {
+    if (state.vehicleAnimationFrame !== null || typeof requestAnimationFrame !== 'function') return;
+    state.vehicleAnimationFrame = requestAnimationFrame(animateVehiclePositions);
+  }
+
+  function animateVehiclePositions() {
+    state.vehicleAnimationFrame = null;
+    const now = Date.now();
+    let hasMoreMovement = false;
+    for (const vehicle of state.vehicles.values()) {
+      if (!(Number(vehicle.motionDuration) > 0)) continue;
+      // Animate only markers currently rendered on the map. Off-screen/filtered
+      // vehicles snap to their latest coordinates and do not cost a frame loop.
+      if (!vehicle.marker || !state.vehicleLayer?.hasLayer(vehicle.marker)) {
+        vehicle.displayCoords = [...(vehicle.motionTo || vehicle.coords)];
+        vehicle.motionFrom = [...vehicle.displayCoords];
+        vehicle.motionDuration = 0;
+        if (vehicle.marker) vehicle.marker.setLatLng(vehicle.displayCoords);
+        continue;
+      }
+      const position = vehicleDisplayCoords(vehicle, now);
+      vehicle.displayCoords = position;
+      if (vehicle.marker) {
+        const old = vehicle.marker.getLatLng();
+        if (Math.abs(old.lat - position[0]) > 0.0000001 || Math.abs(old.lng - position[1]) > 0.0000001) {
+          vehicle.marker.setLatLng(position);
+        }
+      }
+      if (now - Number(vehicle.motionStartedAt || now) >= Number(vehicle.motionDuration)) {
+        vehicle.displayCoords = [...(vehicle.motionTo || vehicle.coords)];
+        vehicle.motionFrom = [...vehicle.displayCoords];
+        vehicle.motionDuration = 0;
+      } else {
+        hasMoreMovement = true;
+      }
+    }
+    if (hasMoreMovement) state.vehicleAnimationFrame = requestAnimationFrame(animateVehiclePositions);
   }
 
   function mergeVehicleSnapshot(previous, incoming, now) {
@@ -281,35 +372,79 @@
       incoming.bearing = incoming.bearing ?? 0;
       incoming.inventory = incoming.inventory ?? null;
       incoming.shortInventory = incoming.shortInventory ?? incoming.inventory;
+      incoming.displayCoords = [...incoming.coords];
+      incoming.motionFrom = [...incoming.coords];
+      incoming.motionTo = [...incoming.coords];
+      incoming.motionStartedAt = now;
+      incoming.motionDuration = 0;
       return incoming;
     }
 
     const [oldLat, oldLon] = previous.coords;
     const [newLat, newLon] = incoming.coords;
+    let visualStart = previous.displayCoords || vehicleDisplayCoords(previous, now);
+    if (previous.marker && state.vehicleLayer?.hasLayer(previous.marker)) {
+      try {
+        const current = previous.marker.getLatLng();
+        visualStart = [current.lat, current.lng];
+      } catch (_) { /* retain last interpolated position */ }
+    }
     const merged = { ...previous, ...incoming };
     const preserveWhenMissing = [
-      'cgmId', 'routeId', 'routeRef', 'normalizedRef', 'inventory',
-      'shortInventory', 'speed', 'timestamp', 'car', 'destination', 'directionId',
-      'nextStopRef', 'occupancy', 'scheduledTime', 'delay', 'bearing',
-      'color', 'modelName', 'hasSourceTimestamp'
+      'cgmId', 'inventory', 'shortInventory', 'speed', 'timestamp', 'car',
+      'occupancy', 'scheduledTime', 'delay', 'bearing', 'hasSourceTimestamp', 'modelName'
     ];
     for (const key of preserveWhenMissing) {
       const value = incoming[key];
       if (value === null || value === undefined || value === '') merged[key] = previous[key];
     }
-    // Partial feed messages sometimes omit route type/model data or only carry
-    // a vehicle ID. Never let those placeholders erase previously resolved info.
+
+    // When a source omits a field entirely, keep the last known value. If it
+    // explicitly sends an empty route/stop/destination, respect that update.
+    if (!incoming.hasRouteIdField && !incoming.routeId) merged.routeId = previous.routeId;
+    if (!incoming.hasRouteRefField && !incoming.routeRef) {
+      merged.routeRef = previous.routeRef;
+      merged.normalizedRef = previous.normalizedRef;
+    } else if (incoming.hasRouteRefField && !incoming.routeRef && !incoming.routeId) {
+      // An explicit blank route is a real feed update, not an omitted field.
+      merged.routeRef = '';
+      merged.normalizedRef = '';
+      if (!incoming.hasRouteIdField) merged.routeId = '';
+    }
+    if (!incoming.hasNextStopField && !incoming.nextStopRef) merged.nextStopRef = previous.nextStopRef;
+    if (!incoming.hasDestinationField && !incoming.destination) merged.destination = previous.destination;
+
+    // Partial feed messages can omit type/model. Do not erase resolved metadata
+    // unless the vehicle's identity genuinely changed.
     if (incoming.type === 'other' && previous.type && previous.type !== 'other') merged.type = previous.type;
-    if (incoming.modelName === 'Неизвестен модел' || incoming.modelName === null) merged.modelName = previous.modelName;
+    const identityChanged = Boolean(incoming.inventory && previous.inventory && incoming.inventory !== previous.inventory);
+    if ((incoming.modelName === 'Неизвестен модел' || incoming.modelName === null) && !identityChanged) merged.modelName = previous.modelName;
     if (!incoming.hasSourceTimestamp && previous.hasSourceTimestamp) { merged.timestamp = previous.timestamp; merged.hasSourceTimestamp = true; }
     if (incoming.inventory === null) merged.inventory = previous.inventory;
     if (incoming.shortInventory === null) merged.shortInventory = previous.shortInventory;
-    if ((incoming.type === 'other' || !incoming.routeId) && previous.color) merged.color = previous.color;
-    if (merged.inventory === null || merged.inventory === undefined || merged.inventory === '') merged.inventory = null;
-    if (merged.shortInventory === null || merged.shortInventory === undefined || merged.shortInventory === '') merged.shortInventory = merged.inventory;
+
     if ((!Number.isFinite(merged.bearing) || merged.bearing === 0) && (oldLat !== newLat || oldLon !== newLon)) {
       merged.bearing = calculateBearing(previous.coords, incoming.coords);
     }
+    // Vehicles without a resolved public line number still appear on the map,
+    // using the mode's default color and a dash in the line pill.
+    if (!cleanValue(merged.routeRef)) merged.color = TYPE_COLORS[merged.type] || TYPE_COLORS.other;
+    else if ((incoming.type === 'other' || !incoming.routeId) && previous.color && !incoming.hasRouteRefField) merged.color = previous.color;
+
+    const distance = distanceMetersBetween(visualStart, incoming.coords);
+    merged.motionFrom = [...visualStart];
+    merged.motionTo = [...incoming.coords];
+    merged.motionStartedAt = now;
+    // Interpolate normal city-scale updates. Large jumps are usually feed resets
+    // or GPS corrections, so snap rather than drawing an implausible cross-city path.
+    merged.motionDuration = distance >= 3 && distance <= 650
+      ? Math.round(Math.max(500, Math.min(1400, 420 + distance * 1.55)))
+      : 0;
+    merged.displayCoords = merged.motionDuration ? [...visualStart] : [...incoming.coords];
+    if (merged.motionDuration === 0) merged.motionFrom = [...incoming.coords];
+
+    if (merged.inventory === null || merged.inventory === undefined || merged.inventory === '') merged.inventory = null;
+    if (merged.shortInventory === null || merged.shortInventory === undefined || merged.shortInventory === '') merged.shortInventory = merged.inventory;
     merged.marker = previous.marker;
     merged.lastSeenAt = now;
     return merged;
@@ -620,6 +755,7 @@
   }
 
   function getVehicleColor(vehicle) {
+    if (!cleanValue(vehicle.routeRef)) return TYPE_COLORS[vehicle.type] || TYPE_COLORS.other;
     if (vehicle.color) return vehicle.color;
     const route = vehicle.routeId ? state.routesById.get(vehicle.routeId) : state.routesByRef.get(vehicle.normalizedRef)?.[0];
     return routeColor(route, vehicle.routeRef, vehicle.type);
@@ -645,7 +781,7 @@
   }
 
   function vehiclePopup(vehicle) {
-    const line = vehicle.routeRef || 'Без линия';
+    const line = vehicle.routeRef || '—';
     const destination = resolveVehicleDestination(vehicle);
     const nextStop = resolveNextStop(vehicle);
     const speed = vehicle.speed === null ? '—' : `${Math.max(0, Math.round(vehicle.speed))} km/h`;
@@ -660,7 +796,7 @@
         </div>
       </div>
       <div class="vehicle-popup-destination"><span>Следваща спирка</span><strong>${escapeHTML(nextStop)}</strong></div>
-      <div class="vehicle-popup-model">${escapeHTML(model)}</div>
+      <div class="vehicle-popup-model vehicle-popup-item"><span>Марка/модел</span><strong>${escapeHTML(model)}</strong></div>
       <div class="vehicle-popup-grid">
         <div class="vehicle-popup-item"><span>Инвентарен номер</span><strong>${escapeHTML(inventory)}</strong></div>
         <div class="vehicle-popup-item"><span>Скорост</span><strong>${escapeHTML(speed)}</strong></div>
@@ -763,9 +899,11 @@
       // Do not instantiate thousands of off-screen markers. This also reduces the
       // amount of work needed for high-frequency full snapshots.
       if (!bounds.contains(vehicle.coords) && !vehicle.marker) return;
+      const displayCoords = vehicleDisplayCoords(vehicle);
+      vehicle.displayCoords = displayCoords;
       if (!vehicle.marker) {
-        vehicle.marker = L.marker(vehicle.coords, { icon: vehicleIcon(vehicle), riseOnHover: true, keyboard: true, title: `Линия ${vehicle.routeRef || '—'} · инв. № ${vehicle.inventory || vehicle.id}` });
-        vehicle.marker.bindPopup(() => vehiclePopup(vehicle), { closeButton: true, maxWidth: 245, minWidth: 210, maxHeight: 190, autoPan: false, keepInView: false, offset: [0, -8], className: 'gts-vehicle-leaflet-popup' });
+        vehicle.marker = L.marker(displayCoords, { icon: vehicleIcon(vehicle), riseOnHover: true, keyboard: true, title: `Линия ${vehicle.routeRef || '—'} · инв. № ${vehicle.inventory || vehicle.id}` });
+        vehicle.marker.bindPopup(() => vehiclePopup(vehicle), { closeButton: true, maxWidth: 245, minWidth: 210, maxHeight: 235, autoPan: false, keepInView: false, offset: [0, -8], className: 'gts-vehicle-leaflet-popup' });
         vehicle.marker.on('click', () => {
           state.selectedVehicleId = id;
           renderSelectedVehicleRoute(vehicle);
@@ -783,7 +921,7 @@
         vehicle._iconSignature = vehicleIconSignature(vehicle);
       } else {
         const oldCoords = vehicle.marker.getLatLng();
-        if (oldCoords.lat !== vehicle.coords[0] || oldCoords.lng !== vehicle.coords[1]) vehicle.marker.setLatLng(vehicle.coords);
+        if (Math.abs(oldCoords.lat - displayCoords[0]) > 0.0000001 || Math.abs(oldCoords.lng - displayCoords[1]) > 0.0000001) vehicle.marker.setLatLng(displayCoords);
         const signature = vehicleIconSignature(vehicle);
         if (vehicle._iconSignature !== signature) {
           vehicle.marker.setIcon(vehicleIcon(vehicle));
@@ -793,7 +931,7 @@
         if (vehicle.marker.isPopupOpen() && popup) {
           const content = vehiclePopup(vehicle);
           const now = Date.now();
-          if (vehicle._popupHTML !== content && now - (vehicle._lastPopupRefreshAt || 0) >= 8000) {
+          if (vehicle._popupHTML !== content && now - (vehicle._lastPopupRefreshAt || 0) >= 1200) {
             vehicle.marker.setPopupContent(content);
             vehicle._popupHTML = content;
             vehicle._lastPopupRefreshAt = now;
@@ -806,6 +944,7 @@
         state.vehicleLayer.removeLayer(vehicle.marker);
       }
     });
+    scheduleVehicleAnimation();
   }
 
   function vehicleIconSignature(vehicle) {
