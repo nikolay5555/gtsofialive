@@ -4,10 +4,12 @@
   const CONFIG = window.GTSOFIA_LIVEMAP_CONFIG || {};
   const SOFIA_CENTER = CONFIG.mapCenter || [42.6977, 23.3219];
   const SOFIA_ZOOM = CONFIG.mapZoom || 13;
-  const STALE_AFTER = CONFIG.refreshStaleAfterMs || 120000;
+  const STALE_AFTER = CONFIG.refreshStaleAfterMs || 3_600_000;
+  const STALE_AFTER_SECONDS = STALE_AFTER / 1000;
   const RECONNECT_DELAY = CONFIG.reconnectDelayMs || 2500;
   const TYPE_NAMES = { bus: 'Автобус', tram: 'Трамвай', trolley: 'Тролей', metro: 'Метро', other: 'Транспорт' };
   const TYPE_COLORS = { bus: '#be1e2d', tram: '#d97706', trolley: '#2563eb', metro: '#7c3aed', other: '#111827' };
+  const FAKE_TROLLEY_ROUTES = new Set(['60', '73', '74', '123', '288', '801']);
 
   const state = {
     map: null,
@@ -15,12 +17,17 @@
     darkTiles: null,
     activeTiles: null,
     routeLayer: null,
+    selectedVehicleRouteLayer: null,
     stopLayer: null,
     vehicleLayer: null,
     data: null,
     routes: [],
+    selectableRoutes: [],
     routesById: new Map(),
+    routesByLooseId: new Map(),
     routesByRef: new Map(),
+    overridesByCgmId: new Map(),
+    overridesByRouteRef: new Map(),
     stops: [],
     stopsByKey: new Map(),
     vehicles: new Map(),
@@ -36,12 +43,21 @@
     showRoute: true,
     userMarker: null,
     lastSnapshotAt: null,
+    renderFrame: null,
+    selectedVehicleId: null,
     toastTimer: null
   };
 
   const $ = (id) => document.getElementById(id);
   const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const hasFinite = (value) => value !== null && value !== undefined && String(value).trim() !== '' && Number.isFinite(Number(value));
+  const cleanValue = (value) => {
+    if (value === null || value === undefined) return '';
+    const text = String(value).trim();
+    return /^(null|undefined|n\/a)$/i.test(text) ? '' : text;
+  };
+  const lineOverrides = () => state.data?.lineOverrides || [];
+  const getOverride = (routeId) => state.overridesByCgmId.get(String(routeId ?? '')) || null;
 
   function normaliseRef(value) {
     return String(value ?? '').trim().replace(/\s+/g, '').toUpperCase();
@@ -51,10 +67,7 @@
     if (!route) return 'other';
     const routeId = String(route.route_id ?? '');
     const shortName = String(route.route_short_name ?? '');
-    const override = (state.data?.lineOverrides || []).find((item) =>
-      String(item.cgm_id ?? '') === routeId ||
-      (!item.cgm_id && normaliseRef(item.route_ref) === normaliseRef(shortName))
-    );
+    const override = getOverride(routeId) || state.overridesByRouteRef?.get(normaliseRef(shortName));
     if (override?.type) return String(override.type).toLowerCase() === 'trolleybus' ? 'trolley' : String(override.type).toLowerCase();
     switch (String(route.route_type)) {
       case '0': return 'tram';
@@ -67,10 +80,7 @@
 
   function routeRef(route) {
     if (!route) return '';
-    const override = (state.data?.lineOverrides || []).find((item) =>
-      String(item.cgm_id ?? '') === String(route.route_id ?? '') ||
-      (!item.cgm_id && normaliseRef(item.route_ref) === normaliseRef(route.route_short_name))
-    );
+    const override = getOverride(route.route_id) || state.overridesByRouteRef?.get(normaliseRef(route.route_short_name));
     let ref = String(override?.route_ref || route.route_short_name || '').trim();
     const number = ref.replace(/[a-zа-я]/gi, '');
     if (/^E/i.test(ref)) ref = number;
@@ -81,9 +91,9 @@
 
   function routeColor(route, ref, type) {
     const routeId = String(route?.route_id ?? '');
-    const override = (state.data?.lineOverrides || []).find((item) => String(item.cgm_id ?? '') === routeId);
+    const override = getOverride(routeId) || state.overridesByRouteRef?.get(normaliseRef(ref));
+    if (String(ref || '').toUpperCase().startsWith('N')) return '#000000';
     if (override?.color) return String(override.color).startsWith('#') ? String(override.color) : `#${override.color}`;
-    if (String(ref || '').toUpperCase().startsWith('N')) return '#374151';
     // Match the line-color rules used by GTSofia: when an override masks the
     // source mode (for example, a temporary bus replacing a trolley), use the
     // displayed mode's color instead of the original GTFS color.
@@ -97,17 +107,22 @@
   }
 
   function routeForVehicle(raw) {
-    const routeId = String(raw.cgm_route_id ?? raw.route_id ?? raw.routeId ?? '');
+    const routeId = cleanValue(raw.cgm_route_id ?? raw.cgmRouteId ?? raw.route_id ?? raw.routeId ?? raw.route?.route_id ?? '');
     const byId = state.routesById.get(routeId);
     if (byId) return byId;
-    const override = (state.data?.lineOverrides || []).find((item) => String(item.cgm_id ?? '') === routeId);
+    const override = getOverride(routeId);
     if (override?.route_ref) {
       const options = state.routesByRef.get(normaliseRef(override.route_ref));
       if (options?.length) return options[0];
     }
-    const ref = normaliseRef(raw.route_ref ?? raw.routeRef ?? raw.line ?? '');
+    const ref = normaliseRef(raw.route_ref ?? raw.routeRef ?? raw.route_short_name ?? raw.routeShortName ?? raw.line ?? raw.line_number ?? raw.lineNumber ?? raw.route?.route_short_name ?? '');
     const byRef = state.routesByRef.get(ref);
-    return byRef?.[0] || null;
+    if (byRef?.length) return byRef[0];
+    // Feeds sometimes report the public CGM route ID but do not include route_ref.
+    // Match equivalent route IDs without relying on the optional geometry filter.
+    const routeIdLoose = routeId.replace(/[^a-z0-9]/gi, '').toUpperCase();
+    if (routeIdLoose) return state.routesByLooseId.get(routeIdLoose) || null;
+    return null;
   }
 
   function toCoordinates(value) {
@@ -123,87 +138,108 @@
   }
 
   function normaliseType(rawType, ref, route, raw = {}) {
-    const candidate = String(rawType ?? '').trim().toLowerCase();
-    const routeId = String(raw.cgm_route_id ?? raw.route_id ?? raw.routeId ?? '');
-    const override = (state.data?.lineOverrides || []).find((item) => String(item.cgm_id ?? '') === routeId);
-    const refUpper = String(ref || '').trim().toUpperCase();
-    const inventoryValue = raw.inv_number ?? raw.inventory_number ?? raw.full_inv_number ?? '';
-    const inventoryNumber = Number.parseInt(String(inventoryValue).split('/')[0], 10);
-
+    const candidate = cleanValue(rawType ?? raw.vehicle_type ?? raw.vehicleType ?? raw.transport_type ?? raw.transportType ?? raw.category ?? raw.route_type ?? raw.routeType).toLowerCase();
+    const routeId = cleanValue(raw.cgm_route_id ?? raw.cgmRouteId ?? raw.route_id ?? raw.routeId ?? raw.route?.route_id ?? '');
+    const override = getOverride(routeId) || state.overridesByRouteRef?.get(normaliseRef(ref));
+    const refUpper = cleanValue(ref).toUpperCase();
+    const inventoryValue = raw.inv_number ?? raw.inventory_number ?? raw.full_inv_number ?? raw.inventoryNumber ?? '';
+    const inventoryNumber = Number.parseInt(String(inventoryValue).split(/[+/]/)[0], 10);
     let type = 'other';
-    if (override?.type) {
-      type = String(override.type).toLowerCase();
-      if (type === 'trolleybus') type = 'trolley';
+
+    const overrideType = cleanValue(override?.type).toLowerCase();
+    if (['bus', 'tram', 'trolley', 'trolleybus', 'metro'].includes(overrideType)) {
+      type = overrideType === 'trolleybus' ? 'trolley' : overrideType;
     } else if (['bus', 'tram', 'trolley', 'trolleybus', 'metro'].includes(candidate)) {
       type = candidate === 'trolleybus' ? 'trolley' : candidate;
-    } else if (candidate === '0' || candidate === '3' || candidate === '11' || candidate === '1') {
+    } else if (/^(0|1|3|11)$/.test(candidate)) {
       type = ({ '0': 'tram', '1': 'metro', '3': 'bus', '11': 'trolley' })[candidate];
-    } else if (candidate.includes('tram') || candidate.includes('трам')) {
+    } else if (/tram|трам/i.test(candidate)) {
       type = 'tram';
-    } else if (candidate.includes('trolley') || candidate.includes('трол')) {
+    } else if (/trolley|трол/i.test(candidate)) {
       type = 'trolley';
-    } else if (candidate.includes('bus') || candidate.includes('автоб')) {
+    } else if (/bus|автоб/i.test(candidate)) {
       type = 'bus';
     } else {
       type = routeType(route);
     }
 
-    // If the route lookup was not possible, the CGM route ID still reveals the
-    // original family (A = bus, TM = tram, TB = trolley). Overrides above win.
+    // Prefer route metadata whenever it exists, but recover mode from CGM IDs
+    // when a route is missing from the static geometry subset.
     if (type === 'other') {
       if (/^TM/i.test(routeId)) type = 'tram';
       else if (/^TB/i.test(routeId)) type = 'trolley';
       else if (/^A/i.test(routeId)) type = 'bus';
-      else if (/^[NTУY]/i.test(refUpper) || /[TТ]М?$/.test(refUpper)) type = 'bus';
+      else if (/^N/i.test(refUpper)) type = 'bus';
+      else if (/(TM|ТМ)$/i.test(refUpper)) type = 'bus';
+      else if (/(TB|ТБ)$/i.test(refUpper)) type = 'bus';
+      else if (/^(bus|tram|trolley|trolleybus|metro)$/i.test(cleanValue(raw.type))) type = cleanValue(raw.type).toLowerCase().replace('trolleybus', 'trolley');
     }
 
-    // Some lines are historically reported as trolleybuses, but are operated
-    // as replacement buses in the live feed. Mirror the reference app's rule.
-    const fakeTrolleyRoutes = new Set(['60', '73', '74', '123', '288', '801']);
-    if (type === 'trolley' && (fakeTrolleyRoutes.has(refUpper) || (Number.isFinite(inventoryNumber) && inventoryNumber >= 5000 && inventoryNumber < 6000))) {
-      type = 'bus';
-    }
+    // Timetable route labels ending in TM/TБ are special bus labels (e.g. 3ТМ).
+    if (type !== 'tram' && /(TM|ТМ|TB|ТБ)$/i.test(refUpper)) type = 'bus';
+    if (type === 'trolley' && (FAKE_TROLLEY_ROUTES.has(refUpper) || (Number.isFinite(inventoryNumber) && inventoryNumber >= 5000 && inventoryNumber < 6000))) type = 'bus';
     return ['bus', 'tram', 'trolley', 'metro'].includes(type) ? type : 'other';
   }
 
   function timestampSeconds(value) {
-    if (!hasFinite(value)) return Date.now() / 1000;
-    const parsed = Number(value);
-    return parsed > 100000000000 ? parsed / 1000 : parsed;
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value === 'string' && !/^\d+(?:\.\d+)?$/.test(value.trim())) {
+      const parsedDate = Date.parse(value);
+      const seconds = Number.isFinite(parsedDate) ? parsedDate / 1000 : null;
+      return seconds !== null && seconds >= 1_000_000_000 && seconds <= 10_000_000_000 ? seconds : null;
+    }
+    if (!hasFinite(value)) return null;
+    let parsed = Number(value);
+    if (parsed > 100_000_000_000) parsed /= 1000;
+    // Ignore non-epoch values rather than making a stale vehicle look freshly updated.
+    if (parsed < 1_000_000_000 || parsed > 10_000_000_000) return null;
+    return parsed;
   }
 
   function normaliseVehicle(raw) {
     if (!raw || typeof raw !== 'object') return null;
-    const coords = toCoordinates(raw.coords ?? raw.coordinates ?? raw.position ?? raw.location);
+    const coords = toCoordinates(raw.coords ?? raw.coordinates ?? raw.position ?? raw.location ?? (raw.lat !== undefined ? { lat: raw.lat, lon: raw.lon ?? raw.lng } : null));
     if (!coords || Math.abs(coords[0]) > 90 || Math.abs(coords[1]) > 180) return null;
 
     const route = routeForVehicle(raw);
-    const routeId = String(raw.cgm_route_id ?? raw.route_id ?? raw.routeId ?? '');
-    const override = (state.data?.lineOverrides || []).find((item) => String(item.cgm_id ?? '') === routeId);
-    let ref = String(raw.route_ref ?? raw.routeRef ?? raw.line ?? routeRef(route) ?? '').trim();
-    if (/^(null|undefined)$/i.test(ref)) ref = '';
-    if (override?.route_ref && !raw.route_ref && !raw.routeRef && !raw.line) ref = String(override.route_ref);
-
-    const type = normaliseType(raw.type ?? raw.vehicle_type, ref, route, raw);
-    const rawId = raw.cgm_id ?? raw.vehicle_id ?? raw.id ?? raw.inv_number ?? raw.inventory_number;
-    if (rawId === undefined || rawId === null || String(rawId).trim() === '') return null;
-
-    const speed = hasFinite(raw.speed) ? Number(raw.speed) : (hasFinite(raw.speed_kmh) ? Number(raw.speed_kmh) : null);
-    const timestampRaw = raw.timestamp ?? raw.updated_at ?? raw.updatedAt ?? raw.time;
-    const timestamp = hasFinite(timestampRaw) ? timestampSeconds(timestampRaw) : null;
+    const routeId = cleanValue(raw.cgm_route_id ?? raw.cgmRouteId ?? raw.route_id ?? raw.routeId ?? raw.route?.route_id ?? '');
+    const rawId = raw.cgm_id ?? raw.vehicle_id ?? raw.vehicleId ?? raw.id ?? raw.inv_number ?? raw.inventory_number ?? raw.full_inv_number;
+    if (rawId === undefined || rawId === null || cleanValue(rawId) === '') return null;
+    const idBasedInventory = /^\d{3,6}$/.test(cleanValue(rawId)) ? cleanValue(rawId) : null;
+    const override = getOverride(routeId);
+    const explicitRef = cleanValue(raw.route_ref ?? raw.routeRef ?? raw.route_short_name ?? raw.routeShortName ?? raw.line ?? raw.line_number ?? raw.lineNumber ?? raw.route?.route_short_name);
+    let ref = explicitRef || cleanValue(routeRef(route)) || cleanValue(override?.route_ref);
+    if (!ref && routeId) {
+      const fallbackRoute = state.routesById.get(routeId);
+      if (fallbackRoute) ref = cleanValue(routeRef(fallbackRoute));
+    }
+    let type = normaliseType(raw.type ?? raw.vehicle_type ?? raw.vehicleType ?? raw.transport_type ?? raw.transportType ?? raw.route_type ?? raw.routeType, ref, route, raw);
+    if (type === 'other' && window.GTSOFIA_VEHICLE_MODELS?.get_vehicle_type_by_inventory) {
+      const guessedType = window.GTSOFIA_VEHICLE_MODELS.get_vehicle_type_by_inventory({
+        inv_number: raw.inv_number ?? raw.inventory_number ?? raw.inventoryNumber ?? raw.full_inv_number ?? raw.fullInventoryNumber ?? idBasedInventory,
+        cgm_id: String(raw.cgm_id ?? raw.vehicle_id ?? raw.id ?? '')
+      });
+      if (guessedType) type = guessedType;
+    }
+    const speedVal = raw.speed ?? raw.speed_kmh ?? raw.speedKmh;
+    const speed = hasFinite(speedVal) ? Number(speedVal) : null;
+    const timestampRaw = raw.timestamp ?? raw.updated_at ?? raw.updatedAt ?? raw.time ?? raw.last_update ?? raw.lastUpdate;
+    const parsedTimestamp = timestampSeconds(timestampRaw);
+    const timestamp = parsedTimestamp ?? Date.now() / 1000;
     const normalizedRef = normaliseRef(ref);
     const color = routeColor(route, normalizedRef, type);
-    const inventoryRaw = raw.full_inv_number ?? raw.inv_number ?? raw.inventory_number;
-    const inventory = inventoryRaw === null || inventoryRaw === undefined || String(inventoryRaw).trim() === '' ? null : String(inventoryRaw);
-    const shortInventoryRaw = raw.inv_number ?? raw.inventory_number ?? raw.full_inv_number;
-    const shortInventory = shortInventoryRaw === null || shortInventoryRaw === undefined || String(shortInventoryRaw).trim() === '' ? null : String(shortInventoryRaw);
-    const rawNextStop = raw.next_stop ?? raw.nextStop ?? raw.destination_stop ?? raw.destination_stop_code ?? raw.stop_code ?? null;
-    const destinationText = raw.trip_headsign ?? raw.destination ?? raw.headsign ?? '';
+    const inventoryRaw = raw.full_inv_number ?? raw.fullInventoryNumber ?? raw.inv_number ?? raw.inventory_number ?? raw.inventoryNumber ?? idBasedInventory;
+    const inventory = inventoryRaw === null || inventoryRaw === undefined || cleanValue(inventoryRaw) === '' ? null : String(inventoryRaw);
+    const shortInventoryRaw = raw.inv_number ?? raw.inventory_number ?? raw.inventoryNumber ?? raw.full_inv_number ?? raw.fullInventoryNumber ?? idBasedInventory;
+    const shortInventory = shortInventoryRaw === null || shortInventoryRaw === undefined || cleanValue(shortInventoryRaw) === '' ? null : String(shortInventoryRaw);
+    const rawNextStop = raw.destination_stop ?? raw.destinationStop ?? raw.next_stop ?? raw.nextStop ?? raw.destination_stop_code ?? raw.destinationStopCode ?? raw.stop_code ?? raw.stopCode ?? null;
+    const destinationText = raw.trip_headsign ?? raw.tripHeadsign ?? raw.destination ?? raw.headsign ?? raw.direction ?? '';
     let modelName = null;
     const modelApi = window.GTSOFIA_VEHICLE_MODELS;
     if (modelApi && shortInventory && ['bus', 'tram', 'trolley'].includes(type)) {
       try {
         modelName = modelApi.get_vehicle_model_name({ type, inv_number: shortInventory, cgm_id: String(raw.cgm_id ?? rawId) }) || null;
+        if (modelName === 'Неизвестен модел') modelName = null;
       } catch (error) {
         console.warn('Не успяхме да определим модела на превозното средство:', error);
       }
@@ -221,11 +257,12 @@
       coords,
       speed,
       timestamp,
+      hasSourceTimestamp: parsedTimestamp !== null,
       car: raw.car ?? null,
       destination: String(destinationText ?? '').trim(),
-      nextStopRef: rawNextStop === null || rawNextStop === undefined || String(rawNextStop).trim() === '' ? null : String(rawNextStop).trim(),
+      nextStopRef: rawNextStop === null || rawNextStop === undefined || cleanValue(rawNextStop) === '' ? null : cleanValue(rawNextStop),
       occupancy: raw.occupancy ?? null,
-      scheduledTime: raw.scheduled_time ?? null,
+      scheduledTime: raw.scheduled_time ?? raw.scheduledTime ?? null,
       delay: hasFinite(raw.delay) ? Number(raw.delay) : null,
       bearing: hasFinite(raw.bearing) ? Number(raw.bearing) : null,
       color,
@@ -240,7 +277,7 @@
     if (!previous) {
       incoming.timestamp = incoming.timestamp ?? now / 1000;
       incoming.bearing = incoming.bearing ?? 0;
-      incoming.inventory = incoming.inventory ?? incoming.id;
+      incoming.inventory = incoming.inventory ?? null;
       incoming.shortInventory = incoming.shortInventory ?? incoming.inventory;
       return incoming;
     }
@@ -252,7 +289,7 @@
       'cgmId', 'routeId', 'routeRef', 'normalizedRef', 'inventory',
       'shortInventory', 'speed', 'timestamp', 'car', 'destination',
       'nextStopRef', 'occupancy', 'scheduledTime', 'delay', 'bearing',
-      'color', 'modelName'
+      'color', 'modelName', 'hasSourceTimestamp'
     ];
     for (const key of preserveWhenMissing) {
       const value = incoming[key];
@@ -262,12 +299,13 @@
     // a vehicle ID. Never let those placeholders erase previously resolved info.
     if (incoming.type === 'other' && previous.type && previous.type !== 'other') merged.type = previous.type;
     if (incoming.modelName === 'Неизвестен модел' || incoming.modelName === null) merged.modelName = previous.modelName;
+    if (!incoming.hasSourceTimestamp && previous.hasSourceTimestamp) { merged.timestamp = previous.timestamp; merged.hasSourceTimestamp = true; }
     if (incoming.inventory === null) merged.inventory = previous.inventory;
     if (incoming.shortInventory === null) merged.shortInventory = previous.shortInventory;
     if ((incoming.type === 'other' || !incoming.routeId) && previous.color) merged.color = previous.color;
-    if (merged.inventory === null || merged.inventory === undefined || merged.inventory === '') merged.inventory = incoming.id;
+    if (merged.inventory === null || merged.inventory === undefined || merged.inventory === '') merged.inventory = null;
     if (merged.shortInventory === null || merged.shortInventory === undefined || merged.shortInventory === '') merged.shortInventory = merged.inventory;
-    if (!merged.bearing && (oldLat !== newLat || oldLon !== newLon)) {
+    if ((!Number.isFinite(merged.bearing) || merged.bearing === 0) && (oldLat !== newLat || oldLon !== newLon)) {
       merged.bearing = calculateBearing(previous.coords, incoming.coords);
     }
     merged.marker = previous.marker;
@@ -354,14 +392,17 @@
   }
 
   function setConnection(status, details = '') {
+    document.body.dataset.connection = status;
     const dot = $('header-live-dot');
-    dot.classList.toggle('is-live', status === 'connected');
-    dot.classList.toggle('is-error', status === 'error');
-    $('header-live-label').textContent = status === 'connected' ? 'На живо' : status === 'error' ? 'Няма връзка' : status === 'connecting' ? 'Свързване…' : 'Изчакване…';
-    $('connection-icon').classList.toggle('connected', status === 'connected');
-    $('connection-icon').classList.toggle('error', status === 'error');
-    $('connection-title').textContent = status === 'connected' ? 'Връзката е активна' : status === 'error' ? 'Източникът не отговаря' : 'Свързване с данните';
-    $('connection-description').textContent = details || (status === 'connected' ? `${CONFIG.sources?.[state.source]?.label || 'ЦГМ'} · поток на живо` : status === 'error' ? 'Ще опитаме да се свържем отново' : 'Изчакване на данни от ЦГМ');
+    const label = $('header-live-label');
+    const icon = $('connection-icon');
+    const title = $('connection-title');
+    const description = $('connection-description');
+    if (dot) { dot.classList.toggle('is-live', status === 'connected'); dot.classList.toggle('is-error', status === 'error'); }
+    if (label) label.textContent = status === 'connected' ? 'На живо' : status === 'error' ? 'Няма връзка' : status === 'connecting' ? 'Свързване…' : 'Изчакване…';
+    if (icon) { icon.classList.toggle('connected', status === 'connected'); icon.classList.toggle('error', status === 'error'); }
+    if (title) title.textContent = status === 'connected' ? 'Връзката е активна' : status === 'error' ? 'Източникът не отговаря' : 'Свързване с данните';
+    if (description) description.textContent = details || (status === 'connected' ? `${CONFIG.sources?.[state.source]?.label || 'ЦГМ'} · поток на живо` : status === 'error' ? 'Ще опитаме да се свържем отново' : 'Изчакване на данни от ЦГМ');
   }
 
   function initMap() {
@@ -382,6 +423,7 @@
     L.control.zoom({ position: 'topright' }).addTo(state.map);
     state.routeLayer = L.layerGroup().addTo(state.map);
     state.stopLayer = L.layerGroup().addTo(state.map);
+    state.selectedVehicleRouteLayer = L.layerGroup().addTo(state.map);
     state.vehicleLayer = L.layerGroup().addTo(state.map);
     state.map.on('moveend zoomend', () => {
       renderStops();
@@ -396,13 +438,19 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       state.data = data;
-      const routesWithLiveGeometry = (data.routes || []).filter((route) => {
+      const allRoutes = data.routes || [];
+      // Keep EVERY route for live vehicle recognition. Only restrict the user-facing
+      // line picker to the routes that have usable shapes in this compact map dataset.
+      state.routes = allRoutes;
+      state.selectableRoutes = allRoutes.filter((route) => {
         if (!['0', '3', '11'].includes(String(route.route_type))) return false;
         const directions = Object.values(data.directions?.[route.route_id] || {});
         return directions.some((direction) => Array.isArray(data.shapes?.[direction.shape_id]) && data.shapes[direction.shape_id].length >= 2);
       });
-      state.routes = routesWithLiveGeometry;
       state.routesById = new Map(state.routes.map((route) => [String(route.route_id), route]));
+      state.routesByLooseId = new Map(state.routes.map((route) => [String(route.route_id ?? '').replace(/[^a-z0-9]/gi, '').toUpperCase(), route]));
+      state.overridesByCgmId = new Map((data.lineOverrides || []).filter((item) => item.cgm_id).map((item) => [String(item.cgm_id), item]));
+      state.overridesByRouteRef = new Map((data.lineOverrides || []).filter((item) => !item.cgm_id && item.route_ref).map((item) => [normaliseRef(item.route_ref), item]));
       state.routesByRef = new Map();
       state.routes.forEach((route) => {
         const ref = normaliseRef(routeRef(route));
@@ -423,7 +471,7 @@
         }
       });
       populateLineFilter();
-      $('static-data-date').textContent = data.updatedAt ? `CGM GTFS · ${data.updatedAt}` : 'CGM Sofia · GTFS';
+      if ($('static-data-date')) $('static-data-date').textContent = data.updatedAt ? `CGM GTFS · ${data.updatedAt}` : 'CGM Sofia · GTFS';
       renderRoute();
       renderStops();
       return true;
@@ -437,7 +485,14 @@
   function populateLineFilter() {
     const select = $('line-filter');
     select.replaceChildren(new Option('Всички линии', 'all'));
-    const unique = [...state.routesByRef.entries()].sort(([a], [b]) => a.localeCompare(b, 'bg', { numeric: true }));
+    const selectableByRef = new Map();
+    state.selectableRoutes.forEach((route) => {
+      const ref = normaliseRef(routeRef(route));
+      if (!ref) return;
+      if (!selectableByRef.has(ref)) selectableByRef.set(ref, []);
+      selectableByRef.get(ref).push(route);
+    });
+    const unique = [...selectableByRef.entries()].sort(([a], [b]) => a.localeCompare(b, 'bg', { numeric: true }));
     unique.forEach(([ref, routes]) => {
       const types = [...new Set(routes.map((route) => routeType(route)))];
       const typeLabel = types.map((type) => TYPE_NAMES[type] || TYPE_NAMES.other).join(' / ');
@@ -453,8 +508,8 @@
 
   function vehicleIcon(vehicle) {
     const color = getVehicleColor(vehicle);
-    const label = vehicle.routeRef || (vehicle.type === 'bus' ? 'А' : vehicle.type === 'tram' ? 'ТМ' : 'ТБ');
-    const age = Date.now() / 1000 - vehicle.timestamp;
+    const label = vehicle.routeRef || '—';
+    const age = Date.now() / 1000 - (vehicle.timestamp || 0);
     const inactiveClass = age > 60 ? ' inactive' : '';
     const bearing = Number.isFinite(vehicle.bearing) ? vehicle.bearing : 0;
     return L.divIcon({
@@ -464,25 +519,32 @@
     });
   }
 
+  function displayInventoryNumber(value) {
+    const text = cleanValue(value);
+    if (/^\d{5,6}$/.test(text) && Number(text) > 9999) return String(Number(text) / 10);
+    return text || '—';
+  }
+
   function vehiclePopup(vehicle) {
     const typeLabel = TYPE_NAMES[vehicle.type] || TYPE_NAMES.other;
     const line = vehicle.routeRef || 'Без линия';
     const destination = resolveNextStop(vehicle);
     const speed = vehicle.speed === null ? '—' : `${Math.max(0, Math.round(vehicle.speed))} km/h`;
     const delay = delayView(vehicle);
-    const model = vehicle.modelName && vehicle.modelName !== 'Неизвестен модел' ? vehicle.modelName : 'Моделът не е разпознат';
+    const model = vehicle.modelName || 'Моделът не е разпознат';
+    const inventory = displayInventoryNumber(vehicle.inventory || vehicle.shortInventory);
     const car = vehicle.car !== null && vehicle.car !== undefined && String(vehicle.car).trim() !== '' ? ` · кола ${vehicle.car}` : '';
     return `<div class="vehicle-popup" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
       <div class="vehicle-popup-top">
         ${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}
-        <div class="vehicle-popup-heading"><strong>${escapeHTML(vehicle.inventory)}</strong><small>${escapeHTML(model)}</small><small>${escapeHTML(typeLabel + car)}</small></div>
+        <div class="vehicle-popup-heading"><strong>${escapeHTML(model)}</strong><small>${escapeHTML(typeLabel + car)}</small></div>
       </div>
       <div class="vehicle-popup-destination"><span>Следваща спирка</span><strong>${escapeHTML(destination)}</strong></div>
       <div class="vehicle-popup-grid">
+        <div class="vehicle-popup-item"><span>Инвентарен номер</span><strong>${escapeHTML(inventory)}</strong></div>
         <div class="vehicle-popup-item"><span>Скорост</span><strong>${escapeHTML(speed)}</strong></div>
         <div class="vehicle-popup-item"><span>Закъснение</span><strong>${escapeHTML(delay.label)}</strong></div>
         <div class="vehicle-popup-item"><span>Последен сигнал</span><strong>${escapeHTML(timeAgo(vehicle.timestamp))}</strong></div>
-        <div class="vehicle-popup-item"><span>Обновено в</span><strong>${escapeHTML(fmtTime(vehicle.timestamp))}</strong></div>
       </div>
     </div>`;
   }
@@ -498,8 +560,15 @@
     return true;
   }
 
+  function isVehicleFresh(vehicle, nowSeconds = Date.now() / 1000) {
+    const signalTime = Number.isFinite(vehicle.timestamp) ? vehicle.timestamp : (vehicle.lastSeenAt / 1000);
+    const age = nowSeconds - signalTime;
+    return age >= -300 && age <= STALE_AFTER_SECONDS;
+  }
+
   function getFilteredVehicles() {
-    return [...state.vehicles.values()].filter((vehicle) => Date.now() - vehicle.lastSeenAt < STALE_AFTER && vehicleMatches(vehicle));
+    const nowSeconds = Date.now() / 1000;
+    return [...state.vehicles.values()].filter((vehicle) => isVehicleFresh(vehicle, nowSeconds) && vehicleMatches(vehicle));
   }
 
   function cmpVehicles(a, b) {
@@ -509,13 +578,15 @@
   }
 
   function updateStats() {
-    const active = [...state.vehicles.values()].filter((vehicle) => Date.now() - vehicle.lastSeenAt < STALE_AFTER);
-    $('stat-bus').textContent = active.filter((vehicle) => vehicle.type === 'bus').length;
-    $('stat-tram').textContent = active.filter((vehicle) => vehicle.type === 'tram').length;
-    $('stat-trolley').textContent = active.filter((vehicle) => vehicle.type === 'trolley').length;
+    if (!$('stat-bus') && !$('stat-tram') && !$('stat-trolley')) return;
+    const active = [...state.vehicles.values()].filter(isVehicleFresh);
+    if ($('stat-bus')) $('stat-bus').textContent = active.filter((vehicle) => vehicle.type === 'bus').length;
+    if ($('stat-tram')) $('stat-tram').textContent = active.filter((vehicle) => vehicle.type === 'tram').length;
+    if ($('stat-trolley')) $('stat-trolley').textContent = active.filter((vehicle) => vehicle.type === 'trolley').length;
   }
 
   function renderVehicleList() {
+    if (!$('vehicle-list')) return;
     const active = getFilteredVehicles();
     let vehicles = active.slice();
     const list = $('vehicle-list');
@@ -561,20 +632,52 @@
   function updateVehicleMarkers() {
     if (!state.map || !window.L) return;
     const bounds = state.map.getBounds();
-    const now = Date.now();
+    const nowSeconds = Date.now() / 1000;
     state.vehicles.forEach((vehicle, id) => {
-      if (now - vehicle.lastSeenAt >= STALE_AFTER || !vehicleMatches(vehicle)) {
+      const fresh = isVehicleFresh(vehicle, nowSeconds);
+      if (!fresh || !vehicleMatches(vehicle)) {
         if (vehicle.marker && state.vehicleLayer.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
         return;
       }
+      // Do not instantiate thousands of off-screen markers. This also reduces the
+      // amount of work needed for high-frequency full snapshots.
+      if (!bounds.contains(vehicle.coords) && !vehicle.marker) return;
       if (!vehicle.marker) {
-        vehicle.marker = L.marker(vehicle.coords, { icon: vehicleIcon(vehicle), riseOnHover: true, keyboard: true, title: `Линия ${vehicle.routeRef || '—'} · инв. № ${vehicle.inventory}` });
-        vehicle.marker.bindPopup(() => vehiclePopup(vehicle), { closeButton: true, maxWidth: 300, minWidth: 230 });
-        vehicle.marker.on('click', () => { state.selectedVehicleId = id; });
+        vehicle.marker = L.marker(vehicle.coords, { icon: vehicleIcon(vehicle), riseOnHover: true, keyboard: true, title: `Линия ${vehicle.routeRef || '—'} · инв. № ${vehicle.inventory || vehicle.id}` });
+        vehicle.marker.bindPopup(() => vehiclePopup(vehicle), { closeButton: true, maxWidth: 245, minWidth: 210, maxHeight: 190, autoPan: false, keepInView: false, offset: [0, -8], className: 'gts-vehicle-leaflet-popup' });
+        vehicle.marker.on('click', () => {
+          state.selectedVehicleId = id;
+          renderSelectedVehicleRoute(vehicle);
+        });
+        vehicle.marker.on('popupopen', () => {
+          vehicle._popupHTML = vehiclePopup(vehicle);
+          vehicle._lastPopupRefreshAt = Date.now();
+        });
+        vehicle.marker.on('popupclose', () => {
+          if (state.selectedVehicleId === id) {
+            state.selectedVehicleId = null;
+            state.selectedVehicleRouteLayer?.clearLayers();
+          }
+        });
+        vehicle._iconSignature = vehicleIconSignature(vehicle);
       } else {
-        vehicle.marker.setLatLng(vehicle.coords);
-        vehicle.marker.setIcon(vehicleIcon(vehicle));
-        if (vehicle.marker.isPopupOpen()) vehicle.marker.setPopupContent(vehiclePopup(vehicle));
+        const oldCoords = vehicle.marker.getLatLng();
+        if (oldCoords.lat !== vehicle.coords[0] || oldCoords.lng !== vehicle.coords[1]) vehicle.marker.setLatLng(vehicle.coords);
+        const signature = vehicleIconSignature(vehicle);
+        if (vehicle._iconSignature !== signature) {
+          vehicle.marker.setIcon(vehicleIcon(vehicle));
+          vehicle._iconSignature = signature;
+        }
+        const popup = vehicle.marker.getPopup();
+        if (vehicle.marker.isPopupOpen() && popup) {
+          const content = vehiclePopup(vehicle);
+          const now = Date.now();
+          if (vehicle._popupHTML !== content && now - (vehicle._lastPopupRefreshAt || 0) >= 8000) {
+            vehicle.marker.setPopupContent(content);
+            vehicle._popupHTML = content;
+            vehicle._lastPopupRefreshAt = now;
+          }
+        }
       }
       if (bounds.contains(vehicle.coords)) {
         if (!state.vehicleLayer.hasLayer(vehicle.marker)) vehicle.marker.addTo(state.vehicleLayer);
@@ -582,6 +685,45 @@
         state.vehicleLayer.removeLayer(vehicle.marker);
       }
     });
+  }
+
+  function vehicleIconSignature(vehicle) {
+    const ageMinutes = Math.floor(Date.now() / 1000 - (vehicle.timestamp || 0)) / 60;
+    return [vehicle.routeRef, vehicle.type, getVehicleColor(vehicle), vehicle.bearing, ageMinutes >= 1 ? 'inactive' : 'fresh'].join('|');
+  }
+
+  function renderSelectedVehicleRoute(vehicle) {
+    if (!state.selectedVehicleRouteLayer || !state.data || !vehicle) return;
+    state.selectedVehicleRouteLayer.clearLayers();
+    const candidates = [];
+    const hasShape = (route) => Object.values(state.data.directions?.[route.route_id] || {}).some((direction) => {
+      const shape = state.data.shapes?.[direction.shape_id];
+      return Array.isArray(shape) && shape.length >= 2;
+    });
+    const directRoute = state.routesById.get(String(vehicle.routeId || ''));
+    if (directRoute && hasShape(directRoute)) candidates.push(directRoute);
+    else if (vehicle.normalizedRef) {
+      const sameRef = state.routesByRef.get(vehicle.normalizedRef) || [];
+      candidates.push(...sameRef.filter((route) => (routeType(route) === vehicle.type || routeType(route) === 'other') && hasShape(route)));
+    }
+    const uniq = new Map(candidates.map((route) => [String(route.route_id), route]));
+    const lines = [];
+    for (const route of uniq.values()) {
+      const directions = state.data.directions?.[route.route_id] || {};
+      for (const direction of Object.values(directions)) {
+        const shape = state.data.shapes?.[direction.shape_id];
+        if (!Array.isArray(shape) || shape.length < 2) continue;
+        const points = shape.map((point) => [Number(point.lat), Number(point.lon)]).filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon));
+        if (points.length < 2) continue;
+        const line = L.polyline(points, {
+          color: getVehicleColor(vehicle), weight: 4, opacity: 0.48,
+          lineCap: 'round', lineJoin: 'round', interactive: false,
+          className: 'selected-vehicle-route'
+        }).addTo(state.selectedVehicleRouteLayer);
+        lines.push(line);
+      }
+    }
+    // Do not zoom to the entire line: the selected marker and compact popup should remain visible.
   }
 
   function renderRoute(fit = false) {
@@ -645,7 +787,7 @@
   }
 
   function updateLastUpdated() {
-    if (!state.lastSnapshotAt) return;
+    if (!state.lastSnapshotAt || !$('last-updated')) return;
     $('last-updated').textContent = `Обновено ${fmtTime(state.lastSnapshotAt / 1000)}`;
   }
 
@@ -658,25 +800,40 @@
     else return;
 
     const now = Date.now();
+    const nowSeconds = now / 1000;
     for (const raw of vehicles) {
       const incoming = normaliseVehicle(raw);
       if (!incoming) continue;
       const previous = state.vehicles.get(incoming.id);
+      // A stale source timestamp is authoritative: do not refresh an old vehicle
+      // just because the proxy keeps repeating that same old record.
+      if (incoming.hasSourceTimestamp && nowSeconds - incoming.timestamp > STALE_AFTER_SECONDS) {
+        continue;
+      }
       const vehicle = mergeVehicleSnapshot(previous, incoming, now);
       state.vehicles.set(vehicle.id, vehicle);
     }
     state.lastSnapshotAt = now;
     for (const [id, vehicle] of state.vehicles.entries()) {
-      if (now - vehicle.lastSeenAt > STALE_AFTER) {
+      if (!isVehicleFresh(vehicle, nowSeconds)) {
         if (vehicle.marker && state.vehicleLayer.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
         state.vehicles.delete(id);
       }
     }
     setConnection('connected', `${CONFIG.sources?.[state.source]?.label || 'ЦГМ'} · ${state.vehicles.size} превозни средства`);
-    updateLastUpdated();
-    updateStats();
-    updateVehicleMarkers();
-    renderVehicleList();
+    scheduleRender();
+  }
+
+  function scheduleRender() {
+    if (state.renderFrame !== null) return;
+    state.renderFrame = requestAnimationFrame(() => {
+      state.renderFrame = null;
+      updateLastUpdated();
+      updateStats();
+      updateVehicleMarkers();
+      // The filter-only sidebar intentionally contains no vehicle list.
+      renderVehicleList();
+    });
   }
 
   function calculateBearing(from, to) {
@@ -771,43 +928,50 @@
   }
 
   function bindUI() {
-    $('search-input').addEventListener('input', (event) => {
+    $('search-input')?.addEventListener('input', (event) => {
       state.query = event.target.value;
+      state.selectedVehicleRouteLayer?.clearLayers();
+      state.selectedVehicleId = null;
       updateVehicleMarkers();
       renderVehicleList();
     });
-    $('type-filter').addEventListener('change', (event) => {
+    $('type-filter')?.addEventListener('change', (event) => {
       state.selectedType = event.target.value;
+      state.selectedVehicleRouteLayer?.clearLayers();
+      state.selectedVehicleId = null;
       updateVehicleMarkers();
       renderVehicleList();
     });
-    $('line-filter').addEventListener('change', (event) => {
+    $('line-filter')?.addEventListener('change', (event) => {
       state.selectedRoute = event.target.value;
-      renderRoute(true);
+      state.routeLayer?.clearLayers();
+      state.selectedVehicleRouteLayer?.clearLayers();
+      state.selectedVehicleId = null;
       renderStops();
       updateVehicleMarkers();
       renderVehicleList();
     });
-    $('clear-filters').addEventListener('click', () => {
+    $('clear-filters')?.addEventListener('click', () => {
       state.selectedType = 'all';
       state.selectedRoute = 'all';
       state.query = '';
-      $('type-filter').value = 'all';
-      $('line-filter').value = 'all';
-      $('search-input').value = '';
+      if ($('type-filter')) $('type-filter').value = 'all';
+      if ($('line-filter')) $('line-filter').value = 'all';
+      if ($('search-input')) $('search-input').value = '';
+      state.selectedVehicleRouteLayer?.clearLayers();
+      state.selectedVehicleId = null;
+      state.routeLayer?.clearLayers();
       renderRoute();
       renderStops();
       updateVehicleMarkers();
       renderVehicleList();
     });
-    $('stops-toggle').addEventListener('change', (event) => {
+    $('stops-toggle')?.addEventListener('change', (event) => {
       state.showStops = event.target.checked;
-      if (state.showStops && state.map && state.map.getZoom() < 14) {
-        showToast('Приближи картата до ниво 14 или повече, за да видиш спирките.', 3200);
-      }
+      if (state.showStops && state.map && state.map.getZoom() < 14) showToast('Приближи картата до ниво 14 или повече, за да видиш спирките.', 3200);
       renderStops();
     });
-    $('route-toggle').addEventListener('change', (event) => {
+    $('route-toggle')?.addEventListener('change', (event) => {
       state.showRoute = event.target.checked;
       if (state.selectedRoute === 'all' && state.showRoute) showToast('Избери линия, за да видиш маршрута ѝ.');
       renderRoute();
@@ -823,52 +987,54 @@
         renderVehicleList();
       });
     });
-    $('reconnect-button').addEventListener('click', () => connectSocket());
-    $('source-filter').addEventListener('change', (event) => {
+    $('reconnect-button')?.addEventListener('click', () => connectSocket());
+    $('source-filter')?.addEventListener('change', (event) => {
       state.source = event.target.value;
       state.vehicles.clear();
       state.vehicleLayer?.clearLayers();
+      state.selectedVehicleRouteLayer?.clearLayers();
       state.lastSnapshotAt = null;
-      $('last-updated').textContent = 'Изчакване на първи ъпдейт';
+      if ($('last-updated')) $('last-updated').textContent = 'Изчакване на първи ъпдейт';
       updateStats();
       renderVehicleList();
       connectSocket();
     });
-    $('settings-button').addEventListener('click', () => {
+    $('settings-button')?.addEventListener('click', () => {
       const panel = $('settings-panel');
-      panel.hidden = !panel.hidden;
+      if (panel) panel.hidden = !panel.hidden;
     });
-    $('theme-toggle').addEventListener('click', () => setTheme(!document.body.classList.contains('dark-theme')));
-    $('locate-button').addEventListener('click', () => {
-      if (!navigator.geolocation) { showToast('Браузърът не поддържа геолокация.'); return; }
-      navigator.geolocation.getCurrentPosition((position) => {
-        const coords = [position.coords.latitude, position.coords.longitude];
-        if (state.userMarker) state.userMarker.setLatLng(coords);
-        else state.userMarker = L.circleMarker(coords, { radius: 7, color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 }).addTo(state.map).bindPopup('Твоето местоположение');
-        state.map.flyTo(coords, 16, { duration: .6 });
-      }, () => showToast('Няма достъп до местоположението. Провери разрешенията на браузъра.'), { enableHighAccuracy: true, timeout: 8000 });
-    });
-    $('reset-map-button').addEventListener('click', () => state.map?.flyTo(SOFIA_CENTER, SOFIA_ZOOM, { duration: .5 }));
+    $('theme-toggle')?.addEventListener('click', () => setTheme(!document.body.classList.contains('dark-theme')));
+    $('locate-button')?.addEventListener('click', locateUser);
+    $('reset-map-button')?.addEventListener('click', () => state.map?.flyTo(SOFIA_CENTER, SOFIA_ZOOM, { duration: .5 }));
     document.addEventListener('keydown', (event) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        $('search-input').focus();
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k' && $('search-input')) {
+        event.preventDefault(); $('search-input').focus();
       }
-      if (event.key === 'Escape') $('search-input').blur();
+      if (event.key === 'Escape' && $('search-input')) $('search-input').blur();
     });
     window.addEventListener('resize', () => state.map?.invalidateSize());
     setInterval(() => {
-      updateLastUpdated();
-      updateStats();
-      renderVehicleList();
-      state.vehicles.forEach((vehicle, id) => {
-        if (Date.now() - vehicle.lastSeenAt > STALE_AFTER) {
+      const nowSeconds = Date.now() / 1000;
+      for (const [id, vehicle] of state.vehicles.entries()) {
+        if (!isVehicleFresh(vehicle, nowSeconds)) {
           if (vehicle.marker && state.vehicleLayer?.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
           state.vehicles.delete(id);
         }
-      });
+      }
+      updateStats();
       updateVehicleMarkers();
-    }, 15000);
+      renderVehicleList();
+    }, 30_000);
+  }
+
+  function locateUser() {
+    if (!navigator.geolocation) { showToast('Браузърът не поддържа геолокация.'); return; }
+    navigator.geolocation.getCurrentPosition((position) => {
+      const coords = [position.coords.latitude, position.coords.longitude];
+      if (state.userMarker) state.userMarker.setLatLng(coords);
+      else state.userMarker = L.circleMarker(coords, { radius: 7, color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 }).addTo(state.map).bindPopup('Твоето местоположение');
+      state.map.flyTo(coords, 16, { duration: .6 });
+    }, () => showToast('Няма достъп до местоположението. Провери разрешенията на браузъра.'), { enableHighAccuracy: true, timeout: 8000 });
   }
 
   async function init() {

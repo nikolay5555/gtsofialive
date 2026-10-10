@@ -15,7 +15,7 @@ window.GTSOFIA_LIVEMAP_CONFIG = {
       url: 'wss://sofiatraffic-proxy.onrender.com/livemap/'
     }
   },
-  refreshStaleAfterMs: 120_000,
+  refreshStaleAfterMs: 3_600_000,
   reconnectDelayMs: 2_500,
   mapCenter: [42.6977, 23.3219],
   mapZoom: 13

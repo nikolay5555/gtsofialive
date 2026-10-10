@@ -343,8 +343,10 @@ function get_vehicle_model(vehicle) {
     const { type, cgm_id } = vehicle;
     let { inv_number } = vehicle;
     if(typeof inv_number === 'string') {
-        inv_number = parseInt(inv_number.split('/')[0]);
+        inv_number = parseInt(inv_number.split(/[\/+]/)[0]);
     }
+    // Some CGM records encode a 4-digit inventory as a 5-digit value with a trailing zero.
+    if (Number.isFinite(inv_number) && inv_number > 9999) inv_number = inv_number / 10;
     if (!models[type]) return { name: 'Неизвестен модел' };
     for (const model of models[type]) {
         for (const range of model.inv_number_ranges) {
@@ -372,6 +374,26 @@ function get_vehicle_model_name(vehicle) {
     return get_model_name(model);
 }
 
+function get_vehicle_type_by_inventory(vehicle) {
+    let inv_number = vehicle?.inv_number;
+    if (typeof inv_number === 'string') inv_number = parseInt(inv_number.split(/[\/+]/)[0], 10);
+    if (!Number.isFinite(inv_number)) return null;
+    if (inv_number > 9999) inv_number = inv_number / 10;
+    const matches = [];
+    for (const type of Object.keys(models)) {
+        for (const model of models[type]) {
+            if (model.extra_check && !model.extra_check(vehicle)) continue;
+            const isMatch = model.inv_number_ranges.some((range) => {
+                if (Array.isArray(range)) return range[0] <= inv_number && inv_number <= range[1];
+                return range === inv_number;
+            });
+            if (isMatch) { matches.push(type); break; }
+        }
+    }
+    const uniqueTypes = [...new Set(matches)];
+    return uniqueTypes.length === 1 ? uniqueTypes[0] : null;
+}
+
 const models_by_type_and_models = {
     tram: models.tram.reduce((obj, item) => (obj[item.id] = item, obj), {}),
     trolley: models.trolley.reduce((obj, item) => (obj[item.id] = item, obj), {}),
@@ -386,6 +408,6 @@ function get_model_name(model) {
 }
 
 
-window.GTSOFIA_VEHICLE_MODELS = { models, get_vehicle_model, get_vehicle_model_name, get_model_name };
+window.GTSOFIA_VEHICLE_MODELS = { models, get_vehicle_model, get_vehicle_model_name, get_model_name, get_vehicle_type_by_inventory };
 
 })();
