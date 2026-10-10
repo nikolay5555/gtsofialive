@@ -139,6 +139,7 @@ GTFS processing now follows the reference workflow more closely:
 - Partial snapshots are merged into a stable cached vehicle object, preventing markers and popup callbacks from retaining outdated data.
 - The same special bus corrections are applied for temporary `TM/TБ` route labels and the known fake-trolley routes.
 - Vehicle heading is derived from consecutive positions while moving, and inactive entries are hidden but retained in the cache so a later fresh GTFS record can reactivate them.
+- The current 46-pair tram-composition catalogue from the reference live-map repo is applied to GTFS snapshots, so known two-wagon trams appear as one marker while their component vehicles are hidden.
 - The selected vehicle's route geometry is recalculated when GTFS updates change the resolved direction or shape.
 - WebSocket errors and closes use a single guarded reconnect timer. The socket is not started if the static route/stop dataset failed to load.
 - Static datasets use revalidation and versioned script URLs to reduce stale browser-cache mismatches.
