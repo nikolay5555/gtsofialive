@@ -534,3 +534,17 @@ body.dark-theme {
 @media (max-width: 760px) {
   .line-picker-menu { max-height: min(52vh, 360px); }
 }
+
+/* Keep location control opposite the zoom controls, in the upper-left corner. */
+.map-locate-button {
+  top: 14px !important;
+  left: 14px !important;
+  right: auto !important;
+}
+@media (max-width: 760px) {
+  .map-locate-button {
+    top: 10px !important;
+    left: 10px !important;
+    right: auto !important;
+  }
+}
