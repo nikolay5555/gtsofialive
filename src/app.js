@@ -1771,6 +1771,7 @@
     let model;
     try {
       model = modelApi.get_vehicle_model({
+        ...(vehicle.raw || {}),
         type: vehicle.type,
         inv_number: inventory,
         cgm_id: String(vehicle.cgmId ?? vehicle.raw?.cgm_id ?? '')
