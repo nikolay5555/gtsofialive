@@ -272,6 +272,7 @@
       id: String(rawId),
       cgmId: firstClean(raw.cgm_id, raw.vehicle_id, raw.vehicleId, raw.id, rawId),
       routeId,
+      gtfsRouteId: route?.route_id ? String(route.route_id) : '',
       routeRef: ref,
       normalizedRef,
       type,
@@ -544,7 +545,7 @@
     for (const candidate of candidates) {
       const { route, key, direction, shape } = candidate;
       let score = 0;
-      if (vehicle.routeId && String(route.route_id) !== String(vehicle.routeId)) score += 80;
+      if (vehicle.gtfsRouteId && String(route.route_id) !== String(vehicle.gtfsRouteId)) score += 80;
 
       // Some live sources send direction keys such as D1/D2. Only trust exact
       // key matches; plain numeric values are ambiguous between source schemas.
