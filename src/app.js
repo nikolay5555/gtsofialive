@@ -859,10 +859,10 @@
         position: relative;
         padding: 0 !important;
         border: 1px solid #dfe5ec;
-        border-radius: 11px !important;
+        border-radius: 16px !important;
         overflow: visible !important;
         background: #fff;
-        box-shadow: 0 7px 20px rgba(15, 23, 42, .19) !important;
+        box-shadow: 0 14px 36px rgba(15, 23, 42, .20) !important;
       }
       .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper::after {
         content: "";
@@ -880,7 +880,7 @@
         display: none !important;
       }
       .gts-vehicle-leaflet-popup .leaflet-popup-content {
-        width: min(278px, calc(100vw - 42px)) !important;
+        width: min(300px, calc(100vw - 42px)) !important;
         max-width: calc(100vw - 42px) !important;
         margin: 6px !important;
         box-sizing: border-box;
@@ -1116,7 +1116,7 @@
 
       @media (max-width: 480px) {
         .gts-vehicle-leaflet-popup .leaflet-popup-content {
-          width: min(248px, calc(100vw - 42px)) !important;
+          width: min(270px, calc(100vw - 42px)) !important;
           max-width: calc(100vw - 42px) !important;
           margin: 6px !important;
         }
@@ -1161,6 +1161,212 @@
           padding: 4px 6px;
         }
       }
+
+      /* Modern vehicle details card: clearer hierarchy, generous spacing, same data. */
+      .gts-vehicle-leaflet-popup .vehicle-popup-card {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        width: 100%;
+        min-width: 0;
+        padding: 4px;
+        color: #172033;
+        font-family: "Sofia Sans", sans-serif;
+        overflow-wrap: anywhere;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 0;
+        padding: 2px 20px 10px 1px;
+        border-bottom: 1px solid #e8edf4;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-route {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        flex-wrap: wrap;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity { gap: 4px; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon,
+      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img {
+        width: 27px;
+        height: 27px;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon { flex-basis: 27px; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill {
+        width: auto;
+        min-width: 36px;
+        height: 28px;
+        padding: 0 7px;
+        border-radius: 8px;
+        font-size: 14px;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-type {
+        display: inline-flex;
+        align-items: center;
+        min-height: 23px;
+        padding: 2px 7px;
+        border: 1px solid #e4eaf2;
+        border-radius: 7px;
+        color: #526176;
+        background: #f7f9fc;
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-inventory {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        min-width: 0;
+        text-align: right;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-inventory span,
+      .gts-vehicle-leaflet-popup .vehicle-popup-card-label,
+      .gts-vehicle-leaflet-popup .vehicle-popup-metric span {
+        color: #64748b;
+        font-size: 9px;
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: .035em;
+        text-transform: uppercase;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-inventory strong {
+        color: #172033;
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.15;
+        overflow-wrap: anywhere;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-destination-card {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 0;
+        padding: 10px 11px;
+        border: 1px solid #e3eaf3;
+        border-radius: 11px;
+        background: #f4f7fb;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-card-label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        letter-spacing: .025em;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-card-label img {
+        width: 11px;
+        height: 13px;
+        flex: 0 0 11px;
+        object-fit: contain;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-destination-card > strong {
+        color: #172033;
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-next-stop,
+      .gts-vehicle-leaflet-popup .vehicle-popup-model-card {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+        padding: 8px 10px;
+        border: 1px solid #e8edf4;
+        border-radius: 10px;
+        background: #fff;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-label-symbol {
+        display: inline-grid;
+        place-items: center;
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: #e9eef5;
+        color: #526176;
+        font-size: 11px;
+        line-height: 1;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-next-stop > strong,
+      .gts-vehicle-leaflet-popup .vehicle-popup-model-card > strong {
+        color: #172033;
+        font-size: 11px;
+        font-weight: 750;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        min-width: 0;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-metric {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+        min-width: 0;
+        min-height: 43px;
+        padding: 7px 9px;
+        border: 1px solid #e8edf4;
+        border-radius: 10px;
+        background: #fff;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-metric strong {
+        color: #172033;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.15;
+        overflow-wrap: anywhere;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-metric.late strong { color: #b42318; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-metric.early strong { color: #a15c07; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-last-signal { grid-column: 1 / -1; min-height: 34px; }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-card-head { border-bottom-color: #334155; }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-type {
+        border-color: #475569;
+        background: #1e293b;
+        color: #cbd5e1;
+      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-inventory strong,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-card > strong,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-next-stop > strong,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-model-card > strong,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-metric strong { color: #f8fafc; }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-inventory span,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-card-label,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-metric span { color: #a9b8cb; }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-card,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-next-stop,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-model-card,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-metric {
+        border-color: #334155;
+        background: #1e293b;
+      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-card { background: #172438; }
+      @media (max-width: 480px) {
+        .gts-vehicle-leaflet-popup .vehicle-popup-card { gap: 7px; padding: 2px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-card-head { gap: 5px; padding-bottom: 8px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon,
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img { width: 23px; height: 23px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon { flex-basis: 23px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill { min-width: 31px; height: 25px; font-size: 12px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-type { font-size: 9px; padding: 2px 5px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-destination-card { padding: 8px 9px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-destination-card > strong { font-size: 13px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-next-stop,
+        .gts-vehicle-leaflet-popup .vehicle-popup-model-card { padding: 7px 8px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-metric { min-height: 39px; padding: 6px 7px; }
+      }
+
     `;
     document.head.appendChild(style);
   }
@@ -1373,26 +1579,16 @@
     state.selectableRoutes.forEach((route) => {
       const ref = normaliseRef(routeRef(route));
       const type = routeType(route);
-      if (!ref || !['bus', 'tram', 'trolley', 'metro'].includes(type)) return;
+      if (!ref || !['bus', 'tram', 'trolley'].includes(type)) return;
       const value = lineFilterValue(ref, type);
       if (!selectableByIdentity.has(value)) {
         selectableByIdentity.set(value, { value, ref, type, route, color: routeColor(route, ref, type) });
       }
     });
 
-    // The compact map dataset currently contains surface-route geometry only.
-    // Keep the four metro lines available as live-vehicle filters as well.
-    Object.entries(METRO_LINE_COLORS).forEach(([ref, color]) => {
-      const value = lineFilterValue(ref, 'metro');
-      if (!selectableByIdentity.has(value)) {
-        const route = { route_id: ref, route_short_name: ref, route_type: '1', route_color: color.slice(1) };
-        selectableByIdentity.set(value, { value, ref, type: 'metro', route, color });
-      }
-    });
-
-    const groupOrder = ['metro', 'tram', 'trolley', 'bus', 'night'];
+    // This live map intentionally lists only modes with realtime surface vehicles.
+    const groupOrder = ['tram', 'trolley', 'bus', 'night'];
     const groupTitles = {
-      metro: 'Метролинии',
       tram: 'Трамвайни линии',
       trolley: 'Тролейбусни линии',
       bus: 'Автобусни линии',
@@ -1477,20 +1673,29 @@
     const delay = delayView(vehicle);
     const model = vehicle.modelName || 'Моделът не е разпознат';
     const inventory = displayInventoryNumber(vehicle.inventory || vehicle.shortInventory);
-    return `<div class="vehicle-popup" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
-      <div class="vehicle-popup-top">
-        <div class="vehicle-popup-line">${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}</div>
-        <div class="vehicle-popup-heading">
-          <span class="vehicle-popup-destination-line"><img src="./assets/icons/destinationarrow.svg" alt="" aria-hidden="true"><strong>${escapeHTML(destination)}</strong></span>
+    return `<div class="vehicle-popup-card" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
+      <div class="vehicle-popup-card-head">
+        <div class="vehicle-popup-route">${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}
+          <span class="vehicle-popup-type">${escapeHTML(TYPE_NAMES[vehicle.type] || TYPE_NAMES.other)}</span>
         </div>
+        <div class="vehicle-popup-inventory"><span>Инвентарен №</span><strong>${escapeHTML(inventory)}</strong></div>
       </div>
-      <div class="vehicle-popup-destination"><span>Следваща спирка</span><strong>${escapeHTML(nextStop)}</strong></div>
-      <div class="vehicle-popup-model vehicle-popup-item"><span>Марка/модел</span><strong>${escapeHTML(model)}</strong></div>
-      <div class="vehicle-popup-grid">
-        <div class="vehicle-popup-item"><span>Инвентарен номер</span><strong>${escapeHTML(inventory)}</strong></div>
-        <div class="vehicle-popup-item"><span>Скорост</span><strong>${escapeHTML(speed)}</strong></div>
-        <div class="vehicle-popup-item"><span>Закъснение</span><strong>${escapeHTML(delay.label)}</strong></div>
-        <div class="vehicle-popup-item"><span>Последен сигнал</span><strong>${escapeHTML(timeAgo(vehicle.timestamp))}</strong></div>
+      <div class="vehicle-popup-destination-card">
+        <span class="vehicle-popup-card-label"><img src="./assets/icons/destinationarrow.svg" alt="" aria-hidden="true">Дестинация</span>
+        <strong>${escapeHTML(destination)}</strong>
+      </div>
+      <div class="vehicle-popup-next-stop">
+        <span class="vehicle-popup-card-label"><span class="vehicle-popup-label-symbol" aria-hidden="true">⌖</span>Следваща спирка</span>
+        <strong>${escapeHTML(nextStop)}</strong>
+      </div>
+      <div class="vehicle-popup-model-card">
+        <span class="vehicle-popup-card-label">Марка / модел</span>
+        <strong>${escapeHTML(model)}</strong>
+      </div>
+      <div class="vehicle-popup-metrics">
+        <div class="vehicle-popup-metric"><span>Скорост</span><strong>${escapeHTML(speed)}</strong></div>
+        <div class="vehicle-popup-metric ${escapeHTML(delay.className || '')}"><span>Закъснение</span><strong>${escapeHTML(delay.label)}</strong></div>
+        <div class="vehicle-popup-metric vehicle-popup-last-signal"><span>Последен сигнал</span><strong>${escapeHTML(timeAgo(vehicle.timestamp))}</strong></div>
       </div>
     </div>`;
   }
@@ -1619,8 +1824,8 @@
           return vehiclePopup(currentVehicle);
         }, {
           closeButton: true,
-          maxWidth: Math.min(isNarrowViewport ? 270 : 300, availableWidth),
-          minWidth: Math.min(isNarrowViewport ? 260 : 290, availableWidth),
+          maxWidth: Math.min(isNarrowViewport ? 280 : 320, availableWidth),
+          minWidth: Math.min(isNarrowViewport ? 260 : 300, availableWidth),
           maxHeight: availableHeight,
           autoPan: true,
           keepInView: true,
@@ -1632,6 +1837,8 @@
         vehicle.marker.on('click', () => {
           const currentVehicle = state.vehicles.get(String(id)) || vehicle;
           state.selectedVehicleId = String(id);
+          const targetZoom = Math.max(15, Math.min(state.map.getZoom(), 16));
+          state.map.flyTo(currentVehicle.coords, targetZoom, { duration: .55 });
           renderSelectedVehicleRoute(currentVehicle, true);
         });
         vehicle.marker.on('popupopen', () => {
