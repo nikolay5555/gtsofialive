@@ -190,7 +190,8 @@ const models = {
                 [1401, 1499],
                 [2500, 2599],
                 [3400, 3499],
-                [7041, 7171]
+                [7041, 7171],
+                [7185, 7193]
             ],
             extra_check: (vehicle) => {
                 return vehicle.cgm_id.startsWith('A');
