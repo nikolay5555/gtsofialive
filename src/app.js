@@ -332,7 +332,7 @@
     // An explicitly supplied but empty route assignment means the vehicle is
     // no longer serving a public line. A snapshot that omits route fields is
     // different: it is merely partial and should not erase the cached route.
-    const hasExplicitNoRoute = hasRouteAssignmentField && !routeId && !ref && !catalogRoute && !route;
+    const hasExplicitNoRoute = hasRouteAssignmentField && !ref && !catalogRoute && !route;
     let type = normaliseType(firstClean(raw.type, raw.vehicle_type, raw.vehicleType, raw.transport_type, raw.transportType, raw.route_type, raw.routeType, catalogRoute?.type), ref, route, raw);
     if (type === 'other' && window.GTSOFIA_VEHICLE_MODELS?.get_vehicle_type_by_inventory) {
       const guessedType = window.GTSOFIA_VEHICLE_MODELS.get_vehicle_type_by_inventory({
