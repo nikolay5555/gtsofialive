@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f4f6">
+  <meta name="description" content="Карта на живо на наземния градски транспорт в София — GTSofia.">
+  <title>Карта на живо | GTSofia</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="src/styles.css">
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script defer src="src/config.js"></script>
+  <script defer src="src/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="GTSofia — карта на живо"><span class="brand-mark">GT</span><span>SOFIA</span></a>
+    <span class="topbar-divider"></span>
+    <div class="topbar-context"><span class="topbar-kicker">GTSOFIA</span><span class="topbar-title">Карта на живо</span></div>
+    <div class="topbar-right">
+      <span class="live-dot" id="header-live-dot"></span>
+      <span id="header-live-label" class="topbar-live-label">Свързване с данните…</span>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar" aria-label="Панел за управление на картата">
+      <div class="sidebar-intro">
+        <div class="eyebrow"><span class="eyebrow-line"></span> ГРАДСКИ ТРАНСПОРТ · СОФИЯ</div>
+        <h1>Карта на живо<span class="title-period">.</span></h1>
+        <p>Проследи наземния транспорт в движение — в реално време.</p>
+      </div>
+
+      <section class="connection-card" aria-live="polite">
+        <span class="connection-icon" id="connection-icon"><span></span></span>
+        <div class="connection-copy"><strong id="connection-title">Свързване…</strong><span id="connection-description">Изчакване на данни от ЦГМ</span></div>
+        <button id="reconnect-button" class="icon-button" type="button" title="Свържи отново" aria-label="Свържи отново">↻</button>
+      </section>
+
+      <section class="stats-grid" aria-label="Брой активни превозни средства">
+        <div class="stat-card"><span class="stat-symbol bus-symbol">А</span><span class="stat-value" id="stat-bus">—</span><span class="stat-label">Автобуси</span></div>
+        <div class="stat-card"><span class="stat-symbol tram-symbol">ТМ</span><span class="stat-value" id="stat-tram">—</span><span class="stat-label">Трамваи</span></div>
+        <div class="stat-card"><span class="stat-symbol trolley-symbol">ТБ</span><span class="stat-value" id="stat-trolley">—</span><span class="stat-label">Тролеи</span></div>
+      </section>
+
+      <section class="filter-section">
+        <div class="section-title-row"><h2>Филтрирай картата</h2><button id="clear-filters" class="text-button" type="button">Изчисти</button></div>
+        <label class="search-field"><span class="search-icon" aria-hidden="true">⌕</span><input id="search-input" type="search" placeholder="Линия или инв. номер" autocomplete="off"><kbd>⌘ K</kbd></label>
+        <label class="field-label" for="type-filter">Вид транспорт</label>
+        <select id="type-filter" class="select-field">
+          <option value="all">Всички видове</option>
+          <option value="bus">Автобуси</option>
+          <option value="tram">Трамваи</option>
+          <option value="trolley">Тролеи</option>
+        </select>
+        <label class="field-label" for="line-filter">Линия</label>
+        <select id="line-filter" class="select-field"><option value="all">Всички линии</option></select>
+      </section>
+
+      <section class="layer-section">
+        <h2>Слоеве на картата</h2>
+        <label class="toggle-row"><span class="toggle-copy"><span class="toggle-glyph stops-glyph">●</span><span><strong>Спирки</strong><small>Показвай спирките наблизо</small></span></span><input id="stops-toggle" type="checkbox"><span class="toggle-track"></span></label>
+        <label class="toggle-row"><span class="toggle-copy"><span class="toggle-glyph route-glyph">⌁</span><span><strong>Маршрут на линията</strong><small>Показва се при избор на линия</small></span></span><input id="route-toggle" type="checkbox" checked><span class="toggle-track"></span></label>
+      </section>
+
+      <section class="vehicles-section">
+        <div class="section-title-row vehicles-title-row">
+          <div><h2 id="results-heading">Превозни средства</h2><p id="results-subtitle">На карта и в движение</p></div>
+          <span class="result-count" id="result-count">0</span>
+        </div>
+        <div class="list-tabs" role="tablist" aria-label="Изглед на списъка">
+          <button class="list-tab active" type="button" role="tab" aria-selected="true" data-view="vehicles">Превозни средства</button>
+          <button class="list-tab" type="button" role="tab" aria-selected="false" data-view="delays">Закъснения</button>
+        </div>
+        <div id="vehicle-list" class="vehicle-list"><div class="empty-state"><span class="empty-state-icon">⌁</span><strong>Зареждаме данните</strong><p>Превозните средства ще се появят тук след свързване.</p></div></div>
+      </section>
+
+      <footer class="sidebar-footer">
+        <div class="data-meta"><span>Данни за разписанията</span><strong id="static-data-date">CGM Sofia · GTFS</strong></div>
+        <button id="settings-button" class="settings-button" type="button"><span aria-hidden="true">⚙</span> Настройки</button>
+        <div id="settings-panel" class="settings-panel" hidden>
+          <label class="field-label" for="source-filter">Източник на позиции</label>
+          <select id="source-filter" class="select-field">
+            <option value="gtfs">ЦГМ · GTFS</option>
+            <option value="avl">ЦГМ · AVL</option>
+          </select>
+          <button id="theme-toggle" class="secondary-button" type="button">Включи тъмна тема</button>
+          <p class="settings-note">Позициите се доставят чрез публичен live proxy. При недостъпност на източника картата няма да показва фиктивни превозни средства.</p>
+        </div>
+      </footer>
+    </aside>
+
+    <section class="map-area" aria-label="Карта на София">
+      <div id="map" role="application" aria-label="Интерактивна карта на градския транспорт"></div>
+      <div class="map-toolbar map-toolbar-top">
+        <div class="map-context-pill"><span class="map-pin">⌖</span><span><strong>София</strong><small id="last-updated">Изчакване на първи ъпдейт</small></span></div>
+        <button id="locate-button" class="map-action-button" type="button"><span aria-hidden="true">◎</span> Моето местоположение</button>
+      </div>
+      <div class="map-toolbar map-toolbar-bottom">
+        <div class="map-legend"><span class="legend-item"><span class="legend-dot bus-legend"></span> Автобус</span><span class="legend-item"><span class="legend-dot tram-legend"></span> Трамвай</span><span class="legend-item"><span class="legend-dot trolley-legend"></span> Тролей</span></div>
+        <button id="reset-map-button" class="map-reset-button" type="button" title="Центрирай картата към София">Център на картата <span aria-hidden="true">↗</span></button>
+      </div>
+      <div class="map-toast" id="map-toast" role="status" aria-live="polite" hidden></div>
+      <div class="map-credit">Картографски данни © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a></div>
+    </section>
+  </main>
+</body>
+</html>
