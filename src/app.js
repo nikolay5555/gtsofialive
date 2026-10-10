@@ -1207,6 +1207,15 @@
         border-radius: 8px;
         font-size: 14px;
       }
+      .gts-vehicle-leaflet-popup .vehicle-popup-inventory-group {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 5px;
+        min-width: 0;
+        margin-left: auto;
+        flex: 0 0 auto;
+      }
       .gts-vehicle-leaflet-popup .vehicle-popup-inventory {
         display: inline-flex;
         align-items: center;
@@ -1357,42 +1366,83 @@
         background: #1e293b;
       }
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-card { background: #172438; }
-      .gts-vehicle-leaflet-popup .vehicle-unexpected-warning {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        min-width: 0;
-        padding: 9px 10px;
-        border: 1px solid #f1d16b;
-        border-radius: 10px;
-        background: #fff7d6;
-        color: #805b08;
-        font-size: 11px;
-        font-weight: 800;
-        line-height: 1.25;
-      }
-      .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-icon {
+      .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger {
+        position: relative;
         display: inline-grid;
         place-items: center;
-        flex: 0 0 20px;
-        width: 20px;
-        height: 20px;
+        flex: 0 0 23px;
+        width: 23px;
+        height: 23px;
+        margin: 0;
+        padding: 0;
+        border: 1px solid #f1d16b;
         border-radius: 7px;
         background: #ffec9e;
         color: #805b08;
+        font: inherit;
         font-size: 13px;
+        font-weight: 800;
+        line-height: 1;
+        cursor: help;
+        -webkit-tap-highlight-color: transparent;
       }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-unexpected-warning {
+      .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        top: calc(100% + 7px);
+        right: 0;
+        z-index: 2000;
+        width: max-content;
+        max-width: min(230px, calc(100vw - 54px));
+        padding: 7px 9px;
+        border: 1px solid #f1d16b;
+        border-radius: 8px;
+        background: #fff7d6;
+        color: #805b08;
+        box-shadow: 0 6px 16px rgba(68, 50, 9, .18);
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.25;
+        text-align: left;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(-3px);
+        transition: opacity .12s ease, transform .12s ease, visibility .12s ease;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger:hover::after,
+      .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger:focus-visible::after,
+      .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger[aria-expanded="true"]::after {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+      }
+      .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger:hover,
+      .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger:focus-visible {
+        outline: none;
+        filter: brightness(.98);
+        box-shadow: 0 0 0 2px rgba(241, 209, 107, .28);
+      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger {
         border-color: #7d6726;
-        background: #3b3218;
-        color: #fde68a;
-      }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-icon {
         background: #554519;
         color: #fde68a;
       }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger::after {
+        border-color: #7d6726;
+        background: #3b3218;
+        color: #fde68a;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, .35);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger::after {
+          transition: none;
+        }
+      }
       @media (max-width: 480px) {
-        .gts-vehicle-leaflet-popup .vehicle-unexpected-warning { padding: 8px 9px; font-size: 10px; }
+        .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger { flex-basis: 22px; width: 22px; height: 22px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-card { gap: 7px; padding: 2px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-card-head { gap: 5px; padding-bottom: 8px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon,
@@ -1812,7 +1862,10 @@
     return `<div class="vehicle-popup-card" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
       <div class="vehicle-popup-card-head">
         <div class="vehicle-popup-route">${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}</div>
-        <div class="vehicle-popup-inventory"><strong>${escapeHTML(inventory)}</strong></div>
+        <div class="vehicle-popup-inventory-group">
+          <div class="vehicle-popup-inventory"><strong>${escapeHTML(inventory)}</strong></div>
+          ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">⚠</button>` : ''}
+        </div>
       </div>
       <div class="vehicle-popup-destination-card">
         <span class="vehicle-popup-card-label"><img src="./assets/icons/destinationarrow.svg" alt="" aria-hidden="true">Дестинация</span>
@@ -1828,7 +1881,6 @@
           <strong>${escapeHTML(model)}</strong>
         </div>
       </div>
-      ${isUnexpected ? `<div class="vehicle-unexpected-warning" role="note"><span class="vehicle-unexpected-warning-icon" aria-hidden="true">⚠</span><span>Необичайно превозно средство</span></div>` : ''}
       <div class="vehicle-popup-metrics">
         <div class="vehicle-popup-metric"><span>Скорост</span><strong>${escapeHTML(speed)}</strong></div>
         <div class="vehicle-popup-metric vehicle-popup-last-signal"><span>Последно обновяване</span><strong>${escapeHTML(timeAgo(vehicle.timestamp))}</strong></div>
@@ -2461,6 +2513,29 @@
     document.addEventListener('click', (event) => {
       if (!event.target.closest('.line-picker')) closeLinePicker();
     });
+    // Capture clicks before Leaflet stops popup events, allowing the warning tooltip
+    // to toggle on touch devices as well as by mouse hover or keyboard focus.
+    document.addEventListener('click', (event) => {
+      const trigger = event.target.closest('.vehicle-unexpected-warning-trigger');
+      const openWarnings = document.querySelectorAll('.vehicle-unexpected-warning-trigger[aria-expanded="true"]');
+      if (!trigger) {
+        openWarnings.forEach((button) => button.setAttribute('aria-expanded', 'false'));
+        return;
+      }
+      event.preventDefault();
+      openWarnings.forEach((button) => {
+        if (button !== trigger) button.setAttribute('aria-expanded', 'false');
+      });
+      const shouldOpen = trigger.getAttribute('aria-expanded') !== 'true';
+      trigger.setAttribute('aria-expanded', String(shouldOpen));
+    }, true);
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      document.querySelectorAll('.vehicle-unexpected-warning-trigger[aria-expanded="true"]').forEach((button) => {
+        button.setAttribute('aria-expanded', 'false');
+        button.blur();
+      });
+    }, true);
     $('clear-filters')?.addEventListener('click', () => {
       state.selectedType = 'all';
       state.selectedRoute = 'all';
