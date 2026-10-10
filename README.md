@@ -127,3 +127,20 @@ python scripts/make-map-data.py /path/to/gtsofia/data/transport.json
 ### Ограничение на актуалността на статичните имена
 
 Live стойностите за следваща спирка/дестинация се обновяват при пристигане на нови съобщения. Самите имена и координати на спирките идват от `data/transport-map.json` (GTFS snapshot в repository-то) и ще се променят само след обновяване и публикуване на този файл.
+
+
+## GTFS live processing parity (2026-10-10)
+
+The live map intentionally uses **GTFS only**. Its WebSocket endpoint is the same v2 endpoint used by [Dimitar5555/sofiatraffic-livemap](https://github.com/Dimitar5555/sofiatraffic-livemap): `wss://sofiatraffic-proxy.onrender.com/v2/livemap/`. AVL is not configured or used.
+
+GTFS processing now follows the reference workflow more closely:
+
+- Route number and vehicle type are resolved from `cgm_route_id` via the same [route metadata catalog](https://github.com/Dimitar5555/sofiatraffic-schedules/blob/master/data/routes.json), with a synchronized local fallback in `data/route-catalog.json`.
+- Partial snapshots are merged into a stable cached vehicle object, preventing markers and popup callbacks from retaining outdated data.
+- The same special bus corrections are applied for temporary `TM/TБ` route labels and the known fake-trolley routes.
+- Vehicle heading is derived from consecutive positions while moving, and inactive entries are hidden but retained in the cache so a later fresh GTFS record can reactivate them.
+- The selected vehicle's route geometry is recalculated when GTFS updates change the resolved direction or shape.
+- WebSocket errors and closes use a single guarded reconnect timer. The socket is not started if the static route/stop dataset failed to load.
+- Static datasets use revalidation and versioned script URLs to reduce stale browser-cache mismatches.
+
+The WebSocket server is an external service. This repository controls the client-side GTFS processing, but cannot guarantee the upstream service's availability or force it to include fields that it does not send.
