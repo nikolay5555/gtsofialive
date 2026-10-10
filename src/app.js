@@ -4,7 +4,7 @@
   const CONFIG = window.GTSOFIA_LIVEMAP_CONFIG || {};
   const SOFIA_CENTER = CONFIG.mapCenter || [42.6977, 23.3219];
   const SOFIA_ZOOM = CONFIG.mapZoom || 13;
-  const STALE_AFTER = CONFIG.refreshStaleAfterMs || 3_600_000;
+  const STALE_AFTER = CONFIG.refreshStaleAfterMs || 120_000;
   const STALE_AFTER_SECONDS = STALE_AFTER / 1000;
   const RECONNECT_DELAY = CONFIG.reconnectDelayMs || 2500;
   const TYPE_NAMES = { bus: 'Автобус', tram: 'Трамвай', trolley: 'Тролей', metro: 'Метро', other: 'Транспорт' };
@@ -25,6 +25,7 @@
     selectableRoutes: [],
     routesById: new Map(),
     routesByLooseId: new Map(),
+    routesByCgmId: new Map(),
     routesByRef: new Map(),
     overridesByCgmId: new Map(),
     overridesByRouteRef: new Map(),
@@ -116,22 +117,20 @@
   }
 
   function routeForVehicle(raw) {
-    const routeId = firstClean(raw.cgm_route_id, raw.cgmRouteId, raw.route_id, raw.routeId, raw.route?.route_id);
-    const byId = state.routesById.get(routeId);
-    if (byId) return byId;
-    const override = getOverride(routeId);
-    if (override?.route_ref) {
-      const options = state.routesByRef.get(normaliseRef(override.route_ref));
-      if (options?.length) return options[0];
+    const cgmRouteId = firstClean(raw.cgm_route_id, raw.cgmRouteId);
+    const catalog = cgmRouteId ? state.routesByCgmId.get(cgmRouteId) : null;
+    const directId = firstClean(raw.route_id, raw.routeId, raw.route?.route_id);
+    const direct = directId ? state.routesById.get(directId) : null;
+    if (direct) return direct;
+    const ref = firstClean(raw.route_ref, raw.routeRef, catalog?.route_ref);
+    if (!ref) return null;
+    const options = state.routesByRef.get(normaliseRef(ref)) || [];
+    const type = firstClean(raw.type, catalog?.type);
+    if (type) {
+      const typed = options.find((route) => routeType(route) === type);
+      if (typed) return typed;
     }
-    const ref = normaliseRef(firstClean(raw.route_ref, raw.routeRef, raw.route_short_name, raw.routeShortName, raw.line, raw.line_number, raw.lineNumber, raw.route?.route_short_name));
-    const byRef = state.routesByRef.get(ref);
-    if (byRef?.length) return byRef[0];
-    // Feeds sometimes report the public CGM route ID but do not include route_ref.
-    // Match equivalent route IDs without relying on the optional geometry filter.
-    const routeIdLoose = routeId.replace(/[^a-z0-9]/gi, '').toUpperCase();
-    if (routeIdLoose) return state.routesByLooseId.get(routeIdLoose) || null;
-    return null;
+    return options.length === 1 ? options[0] : null;
   }
 
   function toCoordinates(value) {
@@ -244,7 +243,8 @@
     const speed = hasFinite(speedVal) ? Number(speedVal) : null;
     const timestampRaw = raw.timestamp ?? raw.updated_at ?? raw.updatedAt ?? raw.time ?? raw.last_update ?? raw.lastUpdate;
     const parsedTimestamp = timestampSeconds(timestampRaw);
-    const timestamp = parsedTimestamp ?? Date.now() / 1000;
+    if (parsedTimestamp === null) return null;
+    const timestamp = parsedTimestamp;
     const normalizedRef = normaliseRef(ref);
     const color = normalizedRef ? routeColor(route, normalizedRef, type) : (TYPE_COLORS[type] || TYPE_COLORS.other);
     const inventoryRaw = firstClean(raw.full_inv_number, raw.fullInventoryNumber, raw.inv_number, raw.inventory_number, raw.inventoryNumber, idBasedInventory);
@@ -659,7 +659,29 @@
     if (description) description.textContent = details || (status === 'connected' ? `${CONFIG.sources?.[state.source]?.label || 'ЦГМ'} · поток на живо` : status === 'error' ? 'Ще опитаме да се свържем отново' : 'Изчакване на данни от ЦГМ');
   }
 
+  function installVehiclePopupStyles() {
+    if (document.getElementById('gtsofia-popup-v6')) return;
+    const style = document.createElement('style');
+    style.id = 'gtsofia-popup-v6';
+    style.textContent = `
+      .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper { border-radius: 16px !important; overflow: hidden; box-shadow: 0 16px 42px rgba(15,23,42,.22) !important; }
+      .gts-vehicle-leaflet-popup .leaflet-popup-content { width: min(320px, calc(100vw - 52px)) !important; max-width: calc(100vw - 52px) !important; margin: 12px !important; box-sizing: border-box; }
+      .gts-vehicle-leaflet-popup .vehicle-popup { min-width: 0; width: 100%; overflow-wrap: anywhere; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-top { align-items: flex-start; gap: 11px; padding-bottom: 11px; border-bottom: 1px solid var(--border); }
+      .gts-vehicle-leaflet-popup .vehicle-popup-destination { display:flex; flex-direction:column; gap:4px; padding:10px 11px; margin:0 0 9px; border:1px solid var(--border); border-radius:10px; background:var(--surface-soft); }
+      .gts-vehicle-leaflet-popup .vehicle-popup-destination strong, .gts-vehicle-leaflet-popup .vehicle-popup-model strong, .gts-vehicle-leaflet-popup .vehicle-popup-item strong { line-height:1.35; overflow-wrap:anywhere; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-item { min-width:0; padding:9px 10px; border:1px solid var(--border); border-radius:10px; background:var(--surface-soft); }
+      @media(max-width:480px) {
+        .gts-vehicle-leaflet-popup .leaflet-popup-content { width:min(282px,calc(100vw - 52px)) !important; max-width:calc(100vw - 52px) !important; margin:9px !important; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-grid { gap:6px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-item { padding:8px; }
+      }`;
+    document.head.appendChild(style);
+  }
+
   function initMap() {
+    installVehiclePopupStyles();
     if (!window.L) {
       setConnection('error', 'Картата не се зареди. Провери интернет връзката.');
       return;
@@ -712,6 +734,16 @@
         if (!state.routesByRef.has(ref)) state.routesByRef.set(ref, []);
         state.routesByRef.get(ref).push(route);
       });
+      // Static route catalog mirrors the GTFS mapping used by Dimitar's map.
+      try {
+        const catalogResponse = await fetch('https://raw.githubusercontent.com/Dimitar5555/sofiatraffic-schedules/master/data/routes.json', { cache: 'force-cache' });
+        if (catalogResponse.ok) {
+          const catalog = await catalogResponse.json();
+          state.routesByCgmId = new Map(catalog.filter((item) => item?.cgm_id && item?.type && item.type !== 'metro').map((item) => [String(item.cgm_id), item]));
+        }
+      } catch (catalogError) {
+        console.warn('GTFS route catalog unavailable; using embedded route data only.', catalogError);
+      }
       state.stops = (data.stops || []).map((stop) => ({
         id: String(stop.stop_id ?? stop.stop_code ?? ''),
         code: String(stop.stop_code ?? stop.stop_id ?? ''),
@@ -818,9 +850,9 @@
   }
 
   function isVehicleFresh(vehicle, nowSeconds = Date.now() / 1000) {
-    const signalTime = Number.isFinite(vehicle.timestamp) ? vehicle.timestamp : (vehicle.lastSeenAt / 1000);
-    const age = nowSeconds - signalTime;
-    return age >= -300 && age <= STALE_AFTER_SECONDS;
+    const signalTime = Number(vehicle?.timestamp);
+    if (!Number.isFinite(signalTime)) return false;
+    return nowSeconds - signalTime <= STALE_AFTER_SECONDS;
   }
 
   function getFilteredVehicles() {
@@ -1240,17 +1272,12 @@
       });
     });
     $('reconnect-button')?.addEventListener('click', () => connectSocket());
-    $('source-filter')?.addEventListener('change', (event) => {
-      state.source = event.target.value;
-      state.vehicles.clear();
-      state.vehicleLayer?.clearLayers();
-      state.selectedVehicleRouteLayer?.clearLayers();
-      state.lastSnapshotAt = null;
-      if ($('last-updated')) $('last-updated').textContent = 'Изчакване на първи ъпдейт';
-      updateStats();
-      renderVehicleList();
-      connectSocket();
-    });
+    state.source = 'gtfs';
+    const sourceFilter = $('source-filter');
+    if (sourceFilter) {
+      sourceFilter.value = 'gtfs';
+      sourceFilter.closest('.filter-section, .filter-row, label')?.setAttribute('hidden', '');
+    }
     $('settings-button')?.addEventListener('click', () => {
       const panel = $('settings-panel');
       if (panel) panel.hidden = !panel.hidden;
@@ -1267,16 +1294,16 @@
     window.addEventListener('resize', () => state.map?.invalidateSize());
     setInterval(() => {
       const nowSeconds = Date.now() / 1000;
+      let removed = false;
       for (const [id, vehicle] of state.vehicles.entries()) {
-        if (!isVehicleFresh(vehicle, nowSeconds)) {
-          if (vehicle.marker && state.vehicleLayer?.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
-          state.vehicles.delete(id);
-        }
+        if (isVehicleFresh(vehicle, nowSeconds)) continue;
+        if (vehicle.marker && state.vehicleLayer?.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
+        if (state.selectedVehicleId === id) { state.selectedVehicleId = null; state.selectedVehicleRouteLayer?.clearLayers(); }
+        state.vehicles.delete(id);
+        removed = true;
       }
-      updateStats();
-      updateVehicleMarkers();
-      renderVehicleList();
-    }, 30_000);
+      if (removed) scheduleRender();
+    }, 1_000);
   }
 
   function locateUser() {
