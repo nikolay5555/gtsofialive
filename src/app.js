@@ -10,6 +10,7 @@
   const MIN_ACTIVE_SPEED = Number(CONFIG.minActiveSpeed) || 3;
   const TYPE_NAMES = { bus: 'Автобус', tram: 'Трамвай', trolley: 'Тролей', metro: 'Метро', other: 'Транспорт' };
   const TYPE_COLORS = { bus: '#BE1E2D', tram: '#F7941D', trolley: '#27AAE1', metro: '#1C75BC', other: '#111827' };
+  const METRO_LINE_COLORS = { M1: '#EB2227', M2: '#1C75BC', M3: '#39B54A', M4: '#FFDE17' };
   const FAKE_TROLLEY_ROUTES = new Set(['60', '73', '74', '123', '288', '801']);
 
   const state = {
@@ -28,6 +29,7 @@
     routesByLooseId: new Map(),
     routesByCgmId: new Map(),
     routesByRef: new Map(),
+    lineFilterItems: [],
     overridesByCgmId: new Map(),
     overridesByRouteRef: new Map(),
     stops: [],
@@ -107,6 +109,8 @@
     const override = getOverride(routeId) || state.overridesByRouteRef?.get(normaliseRef(ref));
     if (String(ref || '').toUpperCase().startsWith('N')) return '#000000';
     if (override?.color) return String(override.color).startsWith('#') ? String(override.color) : `#${override.color}`;
+    const metroColor = METRO_LINE_COLORS[normaliseRef(ref)];
+    if (normaliseTransportType(type) === 'metro' && metroColor) return metroColor;
     // Match the line-color rules used by GTSofia: when an override masks the
     // source mode (for example, a temporary bus replacing a trolley), use the
     // displayed mode's color instead of the original GTFS color.
@@ -776,7 +780,8 @@
   function lineIdentityMarkup(ref, type, color, compact = false) {
     const line = ref || '—';
     const metroClass = type === 'metro' ? ' metro' : '';
-    return `<span class="line-identity${compact ? ' compact' : ''}"><span class="line-identity-icon"><img src="${transportIconPath(type, ref)}" alt="" aria-hidden="true"></span><span class="line-identity-pill${metroClass}" style="--line-color:${escapeHTML(color || TYPE_COLORS[type] || TYPE_COLORS.other)}">${escapeHTML(line)}</span></span>`;
+    const textColor = type === 'metro' && normaliseRef(ref) === 'M4' ? '#111827' : '#ffffff';
+    return `<span class="line-identity${compact ? ' compact' : ''}"><span class="line-identity-icon"><img src="${transportIconPath(type, ref)}" alt="" aria-hidden="true"></span><span class="line-identity-pill${metroClass}" style="--line-color:${escapeHTML(color || TYPE_COLORS[type] || TYPE_COLORS.other)};--line-text-color:${textColor}">${escapeHTML(line)}</span></span>`;
   }
 
   function calcDelay(vehicle) {
@@ -1200,7 +1205,7 @@
       // line picker to the routes that have usable shapes in this compact map dataset.
       state.routes = allRoutes;
       state.selectableRoutes = allRoutes.filter((route) => {
-        if (!['0', '3', '11'].includes(String(route.route_type))) return false;
+        if (!['0', '1', '3', '11'].includes(String(route.route_type))) return false;
         const directions = Object.values(data.directions?.[route.route_id] || {});
         return directions.some((direction) => Array.isArray(data.shapes?.[direction.shape_id]) && data.shapes[direction.shape_id].length >= 2);
       });
@@ -1311,26 +1316,131 @@
     return `${type}::${normaliseRef(ref)}`;
   }
 
+  function linePickerGroup(item) {
+    if (item.type === 'metro') return 'metro';
+    if (item.type === 'tram') return 'tram';
+    if (item.type === 'trolley') return 'trolley';
+    if (item.type === 'bus' && /^N/i.test(item.ref)) return 'night';
+    if (item.type === 'bus') return 'bus';
+    return null;
+  }
+
+  function closeLinePicker(focusTrigger = false) {
+    const trigger = $('line-filter-trigger');
+    const menu = $('line-filter-menu');
+    if (menu) menu.hidden = true;
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    if (focusTrigger) trigger?.focus();
+  }
+
+  function syncLinePickerSelection() {
+    const current = $('line-filter-current');
+    const trigger = $('line-filter-trigger');
+    const menu = $('line-filter-menu');
+    if (!current || !trigger) return;
+
+    const item = state.lineFilterItems.find((candidate) => candidate.value === state.selectedRoute);
+    if (item) {
+      current.innerHTML = lineIdentityMarkup(item.ref, item.type, item.color, true);
+      trigger.setAttribute('aria-label', `Избрана линия ${item.ref}, ${TYPE_NAMES[item.type] || TYPE_NAMES.other}`);
+    } else {
+      current.textContent = 'Всички линии';
+      trigger.setAttribute('aria-label', 'Линия: всички линии');
+    }
+    menu?.querySelectorAll('.line-picker-option').forEach((option) => {
+      option.setAttribute('aria-selected', String(option.dataset.routeValue === state.selectedRoute));
+    });
+  }
+
+  function applyLinePickerValue(value) {
+    state.selectedRoute = value;
+    syncLinePickerSelection();
+    closeLinePicker();
+    state.routeLayer?.clearLayers();
+    clearSelectedVehicleRoute();
+    state.selectedVehicleId = null;
+    renderStops();
+    updateVehicleMarkers();
+    renderVehicleList();
+  }
+
   function populateLineFilter() {
-    const select = $('line-filter');
-    select.replaceChildren(new Option('Всички линии', 'all'));
+    const menu = $('line-filter-menu');
+    if (!menu) return;
+    menu.replaceChildren();
+
     const selectableByIdentity = new Map();
     state.selectableRoutes.forEach((route) => {
       const ref = normaliseRef(routeRef(route));
       const type = routeType(route);
-      if (!ref || !['bus', 'tram', 'trolley'].includes(type)) return;
-      const key = lineFilterValue(ref, type);
-      if (!selectableByIdentity.has(key)) selectableByIdentity.set(key, { ref, type });
+      if (!ref || !['bus', 'tram', 'trolley', 'metro'].includes(type)) return;
+      const value = lineFilterValue(ref, type);
+      if (!selectableByIdentity.has(value)) {
+        selectableByIdentity.set(value, { value, ref, type, route, color: routeColor(route, ref, type) });
+      }
     });
-    const typeOrder = { tram: 0, trolley: 1, bus: 2, metro: 3, other: 4 };
-    const unique = [...selectableByIdentity.entries()].sort(([, a], [, b]) =>
-      a.ref.localeCompare(b.ref, 'bg', { numeric: true }) ||
-      (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9)
-    );
-    unique.forEach(([value, { ref, type }]) => {
-      const typeLabel = (TYPE_NAMES[type] || TYPE_NAMES.other).toLocaleLowerCase('bg-BG');
-      select.add(new Option(`${ref} ${typeLabel}`, value));
+
+    // The compact map dataset currently contains surface-route geometry only.
+    // Keep the four metro lines available as live-vehicle filters as well.
+    Object.entries(METRO_LINE_COLORS).forEach(([ref, color]) => {
+      const value = lineFilterValue(ref, 'metro');
+      if (!selectableByIdentity.has(value)) {
+        const route = { route_id: ref, route_short_name: ref, route_type: '1', route_color: color.slice(1) };
+        selectableByIdentity.set(value, { value, ref, type: 'metro', route, color });
+      }
     });
+
+    const groupOrder = ['metro', 'tram', 'trolley', 'bus', 'night'];
+    const groupTitles = {
+      metro: 'Метролинии',
+      tram: 'Трамвайни линии',
+      trolley: 'Тролейбусни линии',
+      bus: 'Автобусни линии',
+      night: 'Нощни линии'
+    };
+    state.lineFilterItems = [...selectableByIdentity.values()]
+      .map((item) => ({ ...item, group: linePickerGroup(item) }))
+      .filter((item) => item.group)
+      .sort((a, b) =>
+        groupOrder.indexOf(a.group) - groupOrder.indexOf(b.group) ||
+        a.ref.localeCompare(b.ref, 'bg', { numeric: true })
+      );
+
+    if (state.selectedRoute !== 'all' && !state.lineFilterItems.some((item) => item.value === state.selectedRoute)) {
+      state.selectedRoute = 'all';
+    }
+
+    const addOption = (item) => {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.className = 'line-picker-option';
+      option.setAttribute('role', 'option');
+      option.setAttribute('aria-selected', String(item.value === state.selectedRoute));
+      option.dataset.routeValue = item.value;
+      if (item.value === 'all') {
+        option.classList.add('line-picker-all');
+        option.textContent = 'Всички линии';
+        option.setAttribute('aria-label', 'Всички линии');
+      } else {
+        option.innerHTML = lineIdentityMarkup(item.ref, item.type, item.color, true);
+        option.setAttribute('aria-label', `Линия ${item.ref}, ${TYPE_NAMES[item.type] || TYPE_NAMES.other}`);
+        option.title = `${item.ref} · ${TYPE_NAMES[item.type] || TYPE_NAMES.other}`;
+      }
+      menu.appendChild(option);
+    };
+
+    addOption({ value: 'all' });
+    groupOrder.forEach((group) => {
+      const items = state.lineFilterItems.filter((item) => item.group === group);
+      if (!items.length) return;
+      const heading = document.createElement('div');
+      heading.className = 'line-picker-group-label';
+      heading.setAttribute('role', 'presentation');
+      heading.textContent = groupTitles[group];
+      menu.appendChild(heading);
+      items.forEach(addOption);
+    });
+    syncLinePickerSelection();
   }
 
   function getVehicleColor(vehicle) {
@@ -1932,7 +2042,7 @@
       state.selectedRoute = 'all';
       state.query = '';
       $('type-filter').value = 'all';
-      $('line-filter').value = 'all';
+      syncLinePickerSelection();
       $('search-input').value = '';
     }
     updateVehicleMarkers();
@@ -1966,21 +2076,54 @@
       updateVehicleMarkers();
       renderVehicleList();
     });
-    $('line-filter')?.addEventListener('change', (event) => {
-      state.selectedRoute = event.target.value;
-      state.routeLayer?.clearLayers();
-      clearSelectedVehicleRoute();
-      state.selectedVehicleId = null;
-      renderStops();
-      updateVehicleMarkers();
-      renderVehicleList();
+    const linePickerTrigger = $('line-filter-trigger');
+    const linePickerMenu = $('line-filter-menu');
+    linePickerTrigger?.addEventListener('click', () => {
+      const open = linePickerMenu?.hidden !== false;
+      if (linePickerMenu) linePickerMenu.hidden = !open;
+      linePickerTrigger.setAttribute('aria-expanded', String(open));
+    });
+    linePickerTrigger?.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (linePickerMenu) linePickerMenu.hidden = false;
+        linePickerTrigger.setAttribute('aria-expanded', 'true');
+        const options = [...(linePickerMenu?.querySelectorAll('.line-picker-option') || [])];
+        (event.key === 'ArrowUp' ? options.at(-1) : options[0])?.focus();
+      }
+    });
+    linePickerMenu?.addEventListener('click', (event) => {
+      const option = event.target.closest('.line-picker-option');
+      if (!option) return;
+      applyLinePickerValue(option.dataset.routeValue || 'all');
+    });
+    linePickerMenu?.addEventListener('keydown', (event) => {
+      const options = [...linePickerMenu.querySelectorAll('.line-picker-option')];
+      const currentIndex = options.indexOf(document.activeElement);
+      let next = null;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeLinePicker(true);
+        return;
+      }
+      if (event.key === 'ArrowDown') next = options[Math.min(options.length - 1, currentIndex + 1)];
+      else if (event.key === 'ArrowUp') next = options[Math.max(0, currentIndex - 1)];
+      else if (event.key === 'Home') next = options[0];
+      else if (event.key === 'End') next = options.at(-1);
+      if (next) {
+        event.preventDefault();
+        next.focus();
+      }
+    });
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.line-picker')) closeLinePicker();
     });
     $('clear-filters')?.addEventListener('click', () => {
       state.selectedType = 'all';
       state.selectedRoute = 'all';
       state.query = '';
       if ($('type-filter')) $('type-filter').value = 'all';
-      if ($('line-filter')) $('line-filter').value = 'all';
+      syncLinePickerSelection();
       if ($('search-input')) $('search-input').value = '';
       clearSelectedVehicleRoute();
       state.selectedVehicleId = null;
