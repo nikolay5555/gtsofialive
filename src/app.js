@@ -959,7 +959,7 @@
         min-width: 35px;
         width: auto;
         padding: 0 5px;
-        border-radius: 7px;
+        border-radius: 6px;
         font-size: 13px;
         line-height: 1;
         font-weight: 800;
@@ -1204,7 +1204,7 @@
         min-width: 36px;
         height: 28px;
         padding: 0 7px;
-        border-radius: 8px;
+        border-radius: 6px;
         font-size: 14px;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-inventory-group {
