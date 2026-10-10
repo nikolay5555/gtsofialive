@@ -661,23 +661,304 @@
   }
 
   function installVehiclePopupStyles() {
-    if (document.getElementById('gtsofia-popup-v6')) return;
+    if (document.getElementById('gtsofia-popup-v7')) return;
     const style = document.createElement('style');
-    style.id = 'gtsofia-popup-v6';
+    style.id = 'gtsofia-popup-v7';
     style.textContent = `
-      .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper { border-radius: 16px !important; overflow: hidden; box-shadow: 0 16px 42px rgba(15,23,42,.22) !important; }
-      .gts-vehicle-leaflet-popup .leaflet-popup-content { width: min(320px, calc(100vw - 52px)) !important; max-width: calc(100vw - 52px) !important; margin: 12px !important; box-sizing: border-box; }
-      .gts-vehicle-leaflet-popup .vehicle-popup { min-width: 0; width: 100%; overflow-wrap: anywhere; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-top { align-items: flex-start; gap: 11px; padding-bottom: 11px; border-bottom: 1px solid var(--border); }
-      .gts-vehicle-leaflet-popup .vehicle-popup-destination { display:flex; flex-direction:column; gap:4px; padding:10px 11px; margin:0 0 9px; border:1px solid var(--border); border-radius:10px; background:var(--surface-soft); }
-      .gts-vehicle-leaflet-popup .vehicle-popup-destination strong, .gts-vehicle-leaflet-popup .vehicle-popup-model strong, .gts-vehicle-leaflet-popup .vehicle-popup-item strong { line-height:1.35; overflow-wrap:anywhere; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-item { min-width:0; padding:9px 10px; border:1px solid var(--border); border-radius:10px; background:var(--surface-soft); }
-      @media(max-width:480px) {
-        .gts-vehicle-leaflet-popup .leaflet-popup-content { width:min(282px,calc(100vw - 52px)) !important; max-width:calc(100vw - 52px) !important; margin:9px !important; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-grid { gap:6px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-item { padding:8px; }
-      }`;
+      /* Fresh popup design: roomy, high-contrast and responsive. */
+      .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper {
+        padding: 0 !important;
+        border: 1px solid #dfe5ec;
+        border-radius: 18px !important;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 18px 48px rgba(15, 23, 42, .22) !important;
+      }
+      .gts-vehicle-leaflet-popup .leaflet-popup-content {
+        width: min(354px, calc(100vw - 54px)) !important;
+        max-width: calc(100vw - 54px) !important;
+        margin: 16px !important;
+        box-sizing: border-box;
+        font-family: "Sofia Sans", sans-serif;
+      }
+      .gts-vehicle-leaflet-popup .leaflet-popup-close-button {
+        z-index: 2;
+        top: 7px !important;
+        right: 7px !important;
+        width: 28px !important;
+        height: 28px !important;
+        border-radius: 50%;
+        color: #64748b !important;
+        font-size: 22px !important;
+        line-height: 26px !important;
+        text-align: center;
+      }
+      .gts-vehicle-leaflet-popup .leaflet-popup-close-button:hover {
+        color: #0f172a !important;
+        background: #f1f5f9;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup {
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        color: #0f172a;
+        overflow-wrap: anywhere;
+      }
+
+      /* Identity badge + destination are a single, vertically aligned row. */
+      .gts-vehicle-leaflet-popup .vehicle-popup-top {
+        display: flex;
+        align-items: center !important;
+        gap: 14px;
+        min-width: 0;
+        margin: 0 0 15px;
+        padding: 2px 30px 15px 0;
+        border-bottom: 1px solid #e8edf3;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-start;
+        flex: 0 0 auto;
+        gap: 6px;
+        margin: 0;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon,
+      .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon img {
+        display: block;
+        width: 34px;
+        height: 34px;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon {
+        flex: 0 0 34px;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 34px;
+        min-width: 48px;
+        width: auto;
+        padding: 0 9px;
+        border-radius: 9px;
+        font-size: 16px;
+        line-height: 1;
+        font-weight: 800;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-pill.metro {
+        width: 34px;
+        min-width: 34px;
+        padding: 0;
+        border-radius: 50%;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-heading {
+        display: flex;
+        flex: 1 1 auto;
+        align-items: center;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-destination-line {
+        display: flex;
+        align-items: center !important;
+        justify-content: flex-start;
+        gap: 8px;
+        min-width: 0;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-destination-line img {
+        display: block;
+        position: static;
+        width: 15px;
+        height: 18px;
+        flex: 0 0 15px;
+        margin: 0 !important;
+        object-fit: contain;
+        align-self: center;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-destination-line strong {
+        display: block;
+        flex: 1 1 auto;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        color: #172033;
+        font-size: 17px;
+        font-weight: 750;
+        line-height: 1.28;
+        overflow-wrap: anywhere;
+      }
+
+      /* Destination stop and vehicle model get their own clear information rows. */
+      .gts-vehicle-leaflet-popup .vehicle-popup-destination,
+      .gts-vehicle-leaflet-popup .vehicle-popup-model {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 5px;
+        min-width: 0;
+        margin: 0 0 11px;
+        padding: 12px 13px;
+        border: 1px solid #e1e7ef;
+        border-radius: 12px;
+        background: #f7f9fc;
+        color: #0f172a;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-destination span,
+      .gts-vehicle-leaflet-popup .vehicle-popup-model span,
+      .gts-vehicle-leaflet-popup .vehicle-popup-item span {
+        display: block;
+        margin: 0 0 3px;
+        color: #586579;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.3;
+        letter-spacing: 0;
+        text-transform: none;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-destination strong,
+      .gts-vehicle-leaflet-popup .vehicle-popup-model strong {
+        display: block;
+        margin: 0;
+        color: #111827;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+      }
+
+      /* Larger two-column stat cards. */
+      .gts-vehicle-leaflet-popup .vehicle-popup-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: stretch;
+        gap: 9px;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-item {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
+        min-height: 67px;
+        margin: 0;
+        padding: 10px 12px;
+        border: 1px solid #e1e7ef;
+        border-radius: 12px;
+        background: #fff;
+        color: #111827;
+        overflow-wrap: anywhere;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-item strong {
+        display: block;
+        margin: 0;
+        color: #111827;
+        font-size: 16px;
+        font-weight: 750;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-item.late strong { color: #b42318; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-item.early strong { color: #a15c07; }
+
+      body.dark-theme .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper {
+        border-color: #334155;
+        background: #111827;
+      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup {
+        color: #f8fafc;
+      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-top {
+        border-bottom-color: #334155;
+      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-model,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-item {
+        border-color: #334155;
+        background: #1e293b;
+      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination span,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-model span,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-item span {
+        color: #b8c4d6;
+      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination strong,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-model strong,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-item strong,
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-line strong {
+        color: #f8fafc;
+      }
+
+      @media (max-width: 480px) {
+        .gts-vehicle-leaflet-popup .leaflet-popup-content {
+          width: min(300px, calc(100vw - 54px)) !important;
+          max-width: calc(100vw - 54px) !important;
+          margin: 12px !important;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-top {
+          gap: 10px;
+          margin-bottom: 13px;
+          padding-bottom: 13px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity {
+          gap: 4px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon,
+        .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon img {
+          width: 29px;
+          height: 29px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon {
+          flex-basis: 29px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-pill {
+          height: 31px;
+          min-width: 42px;
+          padding: 0 7px;
+          font-size: 15px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-pill.metro {
+          width: 31px;
+          min-width: 31px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-destination-line {
+          gap: 6px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-destination-line img {
+          width: 13px;
+          height: 16px;
+          flex-basis: 13px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-destination-line strong {
+          font-size: 15px;
+          line-height: 1.25;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-destination,
+        .gts-vehicle-leaflet-popup .vehicle-popup-model {
+          padding: 11px 12px;
+          margin-bottom: 9px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-destination span,
+        .gts-vehicle-leaflet-popup .vehicle-popup-model span,
+        .gts-vehicle-leaflet-popup .vehicle-popup-item span {
+          font-size: 12px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-destination strong,
+        .gts-vehicle-leaflet-popup .vehicle-popup-model strong,
+        .gts-vehicle-leaflet-popup .vehicle-popup-item strong {
+          font-size: 15px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-grid {
+          gap: 7px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-item {
+          min-height: 64px;
+          padding: 9px 10px;
+        }
+      }
+    `;
     document.head.appendChild(style);
   }
 
@@ -936,7 +1217,18 @@
       vehicle.displayCoords = displayCoords;
       if (!vehicle.marker) {
         vehicle.marker = L.marker(displayCoords, { icon: vehicleIcon(vehicle), riseOnHover: true, keyboard: true, title: `Линия ${vehicle.routeRef || '—'} · инв. № ${vehicle.inventory || vehicle.id}` });
-        vehicle.marker.bindPopup(() => vehiclePopup(vehicle), { closeButton: true, maxWidth: 245, minWidth: 210, maxHeight: 235, autoPan: false, keepInView: false, offset: [0, -8], className: 'gts-vehicle-leaflet-popup' });
+        const availableWidth = Math.max(250, (window.innerWidth || 1024) - 32);
+        const availableHeight = Math.max(280, (window.innerHeight || 768) - 80);
+        vehicle.marker.bindPopup(() => vehiclePopup(vehicle), {
+          closeButton: true,
+          maxWidth: Math.min(390, availableWidth),
+          minWidth: Math.min(320, availableWidth),
+          maxHeight: availableHeight,
+          autoPan: true,
+          keepInView: true,
+          offset: [0, -10],
+          className: 'gts-vehicle-leaflet-popup'
+        });
         vehicle.marker.on('click', () => {
           state.selectedVehicleId = id;
           renderSelectedVehicleRoute(vehicle);
