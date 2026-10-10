@@ -1041,7 +1041,7 @@
       if (!routeCatalogResponse.ok) throw new Error(`HTTP ${routeCatalogResponse.status} loading route catalog`);
       const routeCatalog = await routeCatalogResponse.json();
       state.routesByCgmId = new Map(routeCatalog
-        .filter((item) => item?.cgm_id && item?.route_ref && item?.type && item.type !== 'metro')
+        .filter((item) => item?.cgm_id && item?.route_ref && item?.type)
         .map((item) => [String(item.cgm_id), item]));
 
       state.stops = (data.stops || []).map((stop) => ({
