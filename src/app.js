@@ -661,36 +661,36 @@
   }
 
   function installVehiclePopupStyles() {
-    if (document.getElementById('gtsofia-popup-v7')) return;
+    if (document.getElementById('gtsofia-popup-v8')) return;
     const style = document.createElement('style');
-    style.id = 'gtsofia-popup-v7';
+    style.id = 'gtsofia-popup-v8';
     style.textContent = `
-      /* Fresh popup design: roomy, high-contrast and responsive. */
+      /* Compact popup: readable type, less padding, less empty height. */
       .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper {
         padding: 0 !important;
         border: 1px solid #dfe5ec;
-        border-radius: 18px !important;
+        border-radius: 14px !important;
         overflow: hidden;
         background: #fff;
-        box-shadow: 0 18px 48px rgba(15, 23, 42, .22) !important;
+        box-shadow: 0 12px 34px rgba(15, 23, 42, .20) !important;
       }
       .gts-vehicle-leaflet-popup .leaflet-popup-content {
-        width: min(354px, calc(100vw - 54px)) !important;
-        max-width: calc(100vw - 54px) !important;
-        margin: 16px !important;
+        width: min(300px, calc(100vw - 50px)) !important;
+        max-width: calc(100vw - 50px) !important;
+        margin: 10px !important;
         box-sizing: border-box;
         font-family: "Sofia Sans", sans-serif;
       }
       .gts-vehicle-leaflet-popup .leaflet-popup-close-button {
         z-index: 2;
-        top: 7px !important;
-        right: 7px !important;
-        width: 28px !important;
-        height: 28px !important;
+        top: 4px !important;
+        right: 4px !important;
+        width: 25px !important;
+        height: 25px !important;
         border-radius: 50%;
         color: #64748b !important;
-        font-size: 22px !important;
-        line-height: 26px !important;
+        font-size: 20px !important;
+        line-height: 23px !important;
         text-align: center;
       }
       .gts-vehicle-leaflet-popup .leaflet-popup-close-button:hover {
@@ -705,14 +705,14 @@
         overflow-wrap: anywhere;
       }
 
-      /* Identity badge + destination are a single, vertically aligned row. */
+      /* Keep line icon, pill, destination arrow and destination on one centered row. */
       .gts-vehicle-leaflet-popup .vehicle-popup-top {
         display: flex;
         align-items: center !important;
-        gap: 14px;
+        gap: 10px;
         min-width: 0;
-        margin: 0 0 15px;
-        padding: 2px 30px 15px 0;
+        margin: 0 0 10px;
+        padding: 1px 24px 10px 0;
         border-bottom: 1px solid #e8edf3;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity {
@@ -720,34 +720,34 @@
         align-items: center;
         justify-content: flex-start;
         flex: 0 0 auto;
-        gap: 6px;
+        gap: 4px;
         margin: 0;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon,
       .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon img {
         display: block;
-        width: 34px;
-        height: 34px;
+        width: 29px;
+        height: 29px;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon {
-        flex: 0 0 34px;
+        flex: 0 0 29px;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-pill {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        height: 34px;
-        min-width: 48px;
+        height: 30px;
+        min-width: 42px;
         width: auto;
-        padding: 0 9px;
-        border-radius: 9px;
-        font-size: 16px;
+        padding: 0 7px;
+        border-radius: 8px;
+        font-size: 15px;
         line-height: 1;
         font-weight: 800;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-pill.metro {
-        width: 34px;
-        min-width: 34px;
+        width: 30px;
+        min-width: 30px;
         padding: 0;
         border-radius: 50%;
       }
@@ -763,7 +763,7 @@
         display: flex;
         align-items: center !important;
         justify-content: flex-start;
-        gap: 8px;
+        gap: 6px;
         min-width: 0;
         width: 100%;
         margin: 0;
@@ -772,9 +772,9 @@
       .gts-vehicle-leaflet-popup .vehicle-popup-destination-line img {
         display: block;
         position: static;
-        width: 15px;
-        height: 18px;
-        flex: 0 0 15px;
+        width: 13px;
+        height: 15px;
+        flex: 0 0 13px;
         margin: 0 !important;
         object-fit: contain;
         align-self: center;
@@ -786,24 +786,23 @@
         margin: 0;
         padding: 0;
         color: #172033;
-        font-size: 17px;
+        font-size: 15px;
         font-weight: 750;
-        line-height: 1.28;
+        line-height: 1.23;
         overflow-wrap: anywhere;
       }
 
-      /* Destination stop and vehicle model get their own clear information rows. */
       .gts-vehicle-leaflet-popup .vehicle-popup-destination,
       .gts-vehicle-leaflet-popup .vehicle-popup-model {
         display: flex;
         flex-direction: column;
         align-items: stretch;
-        gap: 5px;
+        gap: 3px;
         min-width: 0;
-        margin: 0 0 11px;
-        padding: 12px 13px;
+        margin: 0 0 8px;
+        padding: 8px 10px;
         border: 1px solid #e1e7ef;
-        border-radius: 12px;
+        border-radius: 10px;
         background: #f7f9fc;
         color: #0f172a;
       }
@@ -811,11 +810,11 @@
       .gts-vehicle-leaflet-popup .vehicle-popup-model span,
       .gts-vehicle-leaflet-popup .vehicle-popup-item span {
         display: block;
-        margin: 0 0 3px;
+        margin: 0 0 2px;
         color: #586579;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 600;
-        line-height: 1.3;
+        line-height: 1.25;
         letter-spacing: 0;
         text-transform: none;
       }
@@ -824,29 +823,28 @@
         display: block;
         margin: 0;
         color: #111827;
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 700;
-        line-height: 1.35;
+        line-height: 1.3;
         overflow-wrap: anywhere;
       }
 
-      /* Larger two-column stat cards. */
       .gts-vehicle-leaflet-popup .vehicle-popup-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         align-items: stretch;
-        gap: 9px;
+        gap: 6px;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-item {
         display: flex;
         flex-direction: column;
         justify-content: center;
         min-width: 0;
-        min-height: 67px;
+        min-height: 52px;
         margin: 0;
-        padding: 10px 12px;
+        padding: 7px 9px;
         border: 1px solid #e1e7ef;
-        border-radius: 12px;
+        border-radius: 10px;
         background: #fff;
         color: #111827;
         overflow-wrap: anywhere;
@@ -855,9 +853,9 @@
         display: block;
         margin: 0;
         color: #111827;
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 750;
-        line-height: 1.3;
+        line-height: 1.25;
         overflow-wrap: anywhere;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-item.late strong { color: #b42318; }
@@ -867,12 +865,8 @@
         border-color: #334155;
         background: #111827;
       }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup {
-        color: #f8fafc;
-      }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-top {
-        border-bottom-color: #334155;
-      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup { color: #f8fafc; }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-top { border-bottom-color: #334155; }
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination,
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-model,
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-item {
@@ -881,81 +875,64 @@
       }
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination span,
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-model span,
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-item span {
-        color: #b8c4d6;
-      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-item span { color: #b8c4d6; }
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination strong,
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-model strong,
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-item strong,
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-line strong {
-        color: #f8fafc;
-      }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-line strong { color: #f8fafc; }
 
       @media (max-width: 480px) {
         .gts-vehicle-leaflet-popup .leaflet-popup-content {
-          width: min(300px, calc(100vw - 54px)) !important;
-          max-width: calc(100vw - 54px) !important;
-          margin: 12px !important;
+          width: min(270px, calc(100vw - 50px)) !important;
+          max-width: calc(100vw - 50px) !important;
+          margin: 9px !important;
         }
         .gts-vehicle-leaflet-popup .vehicle-popup-top {
-          gap: 10px;
-          margin-bottom: 13px;
-          padding-bottom: 13px;
-        }
-        .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity {
-          gap: 4px;
+          gap: 8px;
+          margin-bottom: 9px;
+          padding-bottom: 9px;
         }
         .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon,
         .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon img {
-          width: 29px;
-          height: 29px;
+          width: 26px;
+          height: 26px;
         }
-        .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon {
-          flex-basis: 29px;
-        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-icon { flex-basis: 26px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-pill {
-          height: 31px;
-          min-width: 42px;
-          padding: 0 7px;
-          font-size: 15px;
+          height: 28px;
+          min-width: 38px;
+          padding: 0 6px;
+          font-size: 14px;
         }
         .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-pill.metro {
-          width: 31px;
-          min-width: 31px;
+          width: 28px;
+          min-width: 28px;
         }
-        .gts-vehicle-leaflet-popup .vehicle-popup-destination-line {
-          gap: 6px;
-        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-destination-line { gap: 5px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-line img {
-          width: 13px;
-          height: 16px;
-          flex-basis: 13px;
+          width: 12px;
+          height: 14px;
+          flex-basis: 12px;
         }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-line strong {
-          font-size: 15px;
-          line-height: 1.25;
+          font-size: 14px;
+          line-height: 1.2;
         }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination,
         .gts-vehicle-leaflet-popup .vehicle-popup-model {
-          padding: 11px 12px;
-          margin-bottom: 9px;
+          padding: 7px 9px;
+          margin-bottom: 7px;
         }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination span,
         .gts-vehicle-leaflet-popup .vehicle-popup-model span,
-        .gts-vehicle-leaflet-popup .vehicle-popup-item span {
-          font-size: 12px;
-        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-item span { font-size: 10.5px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination strong,
         .gts-vehicle-leaflet-popup .vehicle-popup-model strong,
-        .gts-vehicle-leaflet-popup .vehicle-popup-item strong {
-          font-size: 15px;
-        }
-        .gts-vehicle-leaflet-popup .vehicle-popup-grid {
-          gap: 7px;
-        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-item strong { font-size: 13px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-grid { gap: 5px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-item {
-          min-height: 64px;
-          padding: 9px 10px;
+          min-height: 48px;
+          padding: 6px 8px;
         }
       }
     `;
@@ -1217,16 +1194,16 @@
       vehicle.displayCoords = displayCoords;
       if (!vehicle.marker) {
         vehicle.marker = L.marker(displayCoords, { icon: vehicleIcon(vehicle), riseOnHover: true, keyboard: true, title: `Линия ${vehicle.routeRef || '—'} · инв. № ${vehicle.inventory || vehicle.id}` });
-        const availableWidth = Math.max(250, (window.innerWidth || 1024) - 32);
-        const availableHeight = Math.max(280, (window.innerHeight || 768) - 80);
+        const availableWidth = Math.max(240, (window.innerWidth || 1024) - 32);
+        const availableHeight = Math.max(250, (window.innerHeight || 768) - 64);
         vehicle.marker.bindPopup(() => vehiclePopup(vehicle), {
           closeButton: true,
-          maxWidth: Math.min(390, availableWidth),
-          minWidth: Math.min(320, availableWidth),
+          maxWidth: Math.min(330, availableWidth),
+          minWidth: Math.min(280, availableWidth),
           maxHeight: availableHeight,
           autoPan: true,
           keepInView: true,
-          offset: [0, -10],
+          offset: [0, -8],
           className: 'gts-vehicle-leaflet-popup'
         });
         vehicle.marker.on('click', () => {
