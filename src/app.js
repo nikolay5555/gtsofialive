@@ -1168,10 +1168,10 @@
       .gts-vehicle-leaflet-popup .vehicle-popup-card {
         display: flex;
         flex-direction: column;
-        gap: 9px;
+        gap: 7px;
         width: 100%;
         min-width: 0;
-        padding: 4px;
+        padding: 2px;
         color: #172033;
         font-family: "Sofia Sans", sans-serif;
         overflow-wrap: anywhere;
@@ -1182,13 +1182,13 @@
         justify-content: space-between;
         gap: 8px;
         min-width: 0;
-        padding: 2px 20px 10px 1px;
+        padding: 0 20px 7px 0;
         border-bottom: 1px solid #e8edf4;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-route {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 4px;
         min-width: 0;
         flex-wrap: wrap;
       }
@@ -1207,9 +1207,12 @@
         border-radius: 8px;
         font-size: 14px;
       }
-      .gts-vehicle-leaflet-popup .vehicle-popup-type {
+      .gts-vehicle-leaflet-popup .vehicle-popup-inventory {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        min-width: 0;
         min-height: 23px;
         padding: 2px 7px;
         border: 1px solid #e4eaf2;
@@ -1218,17 +1221,10 @@
         background: #f7f9fc;
         font-size: 10px;
         font-weight: 700;
+        line-height: 1.15;
         white-space: nowrap;
+        font-variant-numeric: tabular-nums;
       }
-      .gts-vehicle-leaflet-popup .vehicle-popup-inventory {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 2px;
-        min-width: 0;
-        text-align: right;
-      }
-      .gts-vehicle-leaflet-popup .vehicle-popup-inventory span,
       .gts-vehicle-leaflet-popup .vehicle-popup-card-label,
       .gts-vehicle-leaflet-popup .vehicle-popup-metric span {
         color: #64748b;
@@ -1239,18 +1235,18 @@
         text-transform: uppercase;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-inventory strong {
-        color: #172033;
-        font-size: 13px;
-        font-weight: 800;
-        line-height: 1.15;
+        color: inherit;
+        font-size: inherit;
+        font-weight: inherit;
+        line-height: inherit;
         overflow-wrap: anywhere;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-destination-card {
         display: flex;
         flex-direction: column;
-        gap: 5px;
+        gap: 4px;
         min-width: 0;
-        padding: 10px 11px;
+        padding: 8px 9px;
         border: 1px solid #e3eaf3;
         border-radius: 11px;
         background: #f4f7fb;
@@ -1274,13 +1270,20 @@
         line-height: 1.25;
         overflow-wrap: anywhere;
       }
-      .gts-vehicle-leaflet-popup .vehicle-popup-next-stop,
-      .gts-vehicle-leaflet-popup .vehicle-popup-model-card {
+      .gts-vehicle-leaflet-popup .vehicle-popup-details-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        min-width: 0;
+        align-items: stretch;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-details-grid > .vehicle-popup-next-stop,
+      .gts-vehicle-leaflet-popup .vehicle-popup-details-grid > .vehicle-popup-model-card {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 3px;
         min-width: 0;
-        padding: 8px 10px;
+        padding: 7px 8px;
         border: 1px solid #e8edf4;
         border-radius: 10px;
         background: #fff;
@@ -1314,10 +1317,10 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        gap: 4px;
+        gap: 3px;
         min-width: 0;
-        min-height: 43px;
-        padding: 7px 9px;
+        min-height: 39px;
+        padding: 6px 8px;
         border: 1px solid #e8edf4;
         border-radius: 10px;
         background: #fff;
@@ -1331,9 +1334,9 @@
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-metric.late strong { color: #b42318; }
       .gts-vehicle-leaflet-popup .vehicle-popup-metric.early strong { color: #a15c07; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-last-signal { grid-column: 1 / -1; min-height: 34px; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-last-signal { grid-column: auto; min-height: 39px; }
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-card-head { border-bottom-color: #334155; }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-type {
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-inventory {
         border-color: #475569;
         background: #1e293b;
         color: #cbd5e1;
@@ -1396,12 +1399,14 @@
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img { width: 23px; height: 23px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon { flex-basis: 23px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill { min-width: 31px; height: 25px; font-size: 12px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-type { font-size: 9px; padding: 2px 5px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-inventory { min-height: 22px; padding: 2px 6px; font-size: 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-card { padding: 8px 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-card > strong { font-size: 13px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-next-stop,
-        .gts-vehicle-leaflet-popup .vehicle-popup-model-card { padding: 7px 8px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-metric { min-height: 39px; padding: 6px 7px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-details-grid { gap: 5px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-details-grid > .vehicle-popup-next-stop,
+        .gts-vehicle-leaflet-popup .vehicle-popup-details-grid > .vehicle-popup-model-card { padding: 6px 7px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-metric { min-height: 36px; padding: 5px 7px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-last-signal { min-height: 36px; }
       }
 
     `;
@@ -1801,34 +1806,32 @@
     const destination = resolveVehicleDestination(vehicle);
     const nextStop = resolveNextStop(vehicle);
     const speed = vehicle.speed === null ? '—' : `${Math.max(0, Math.round(vehicle.speed))} km/h`;
-    const delay = delayView(vehicle);
     const model = vehicle.modelName || 'Моделът не е разпознат';
     const inventory = displayInventoryNumber(vehicle.inventory || vehicle.shortInventory);
     const isUnexpected = !isVehicleExpectedOnLine(vehicle);
     return `<div class="vehicle-popup-card" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
       <div class="vehicle-popup-card-head">
-        <div class="vehicle-popup-route">${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}
-          <span class="vehicle-popup-type">${escapeHTML(TYPE_NAMES[vehicle.type] || TYPE_NAMES.other)}</span>
-        </div>
-        <div class="vehicle-popup-inventory"><span>Инвентарен №</span><strong>${escapeHTML(inventory)}</strong></div>
+        <div class="vehicle-popup-route">${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}</div>
+        <div class="vehicle-popup-inventory"><strong>${escapeHTML(inventory)}</strong></div>
       </div>
       <div class="vehicle-popup-destination-card">
         <span class="vehicle-popup-card-label"><img src="./assets/icons/destinationarrow.svg" alt="" aria-hidden="true">Дестинация</span>
         <strong>${escapeHTML(destination)}</strong>
       </div>
-      <div class="vehicle-popup-next-stop">
-        <span class="vehicle-popup-card-label"><span class="vehicle-popup-label-symbol" aria-hidden="true">⌖</span>Следваща спирка</span>
-        <strong>${escapeHTML(nextStop)}</strong>
-      </div>
-      <div class="vehicle-popup-model-card">
-        <span class="vehicle-popup-card-label">Марка / модел</span>
-        <strong>${escapeHTML(model)}</strong>
+      <div class="vehicle-popup-details-grid">
+        <div class="vehicle-popup-next-stop">
+          <span class="vehicle-popup-card-label"><span class="vehicle-popup-label-symbol" aria-hidden="true">⌖</span>Следваща спирка</span>
+          <strong>${escapeHTML(nextStop)}</strong>
+        </div>
+        <div class="vehicle-popup-model-card">
+          <span class="vehicle-popup-card-label">Марка / модел</span>
+          <strong>${escapeHTML(model)}</strong>
+        </div>
       </div>
       ${isUnexpected ? `<div class="vehicle-unexpected-warning" role="note"><span class="vehicle-unexpected-warning-icon" aria-hidden="true">⚠</span><span>Необичайно превозно средство</span></div>` : ''}
       <div class="vehicle-popup-metrics">
         <div class="vehicle-popup-metric"><span>Скорост</span><strong>${escapeHTML(speed)}</strong></div>
-        <div class="vehicle-popup-metric ${escapeHTML(delay.className || '')}"><span>Закъснение</span><strong>${escapeHTML(delay.label)}</strong></div>
-        <div class="vehicle-popup-metric vehicle-popup-last-signal"><span>Последен сигнал</span><strong>${escapeHTML(timeAgo(vehicle.timestamp))}</strong></div>
+        <div class="vehicle-popup-metric vehicle-popup-last-signal"><span>Последно обновяване</span><strong>${escapeHTML(timeAgo(vehicle.timestamp))}</strong></div>
       </div>
     </div>`;
   }
