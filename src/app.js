@@ -1297,21 +1297,39 @@
     }
   }
 
+  function selectedRouteParts() {
+    if (state.selectedRoute === 'all') return null;
+    const separator = state.selectedRoute.indexOf('::');
+    if (separator < 0) return { ref: state.selectedRoute, type: null };
+    return {
+      ref: state.selectedRoute.slice(separator + 2),
+      type: state.selectedRoute.slice(0, separator)
+    };
+  }
+
+  function lineFilterValue(ref, type) {
+    return `${type}::${normaliseRef(ref)}`;
+  }
+
   function populateLineFilter() {
     const select = $('line-filter');
     select.replaceChildren(new Option('Всички линии', 'all'));
-    const selectableByRef = new Map();
+    const selectableByIdentity = new Map();
     state.selectableRoutes.forEach((route) => {
       const ref = normaliseRef(routeRef(route));
-      if (!ref) return;
-      if (!selectableByRef.has(ref)) selectableByRef.set(ref, []);
-      selectableByRef.get(ref).push(route);
+      const type = routeType(route);
+      if (!ref || !['bus', 'tram', 'trolley'].includes(type)) return;
+      const key = lineFilterValue(ref, type);
+      if (!selectableByIdentity.has(key)) selectableByIdentity.set(key, { ref, type });
     });
-    const unique = [...selectableByRef.entries()].sort(([a], [b]) => a.localeCompare(b, 'bg', { numeric: true }));
-    unique.forEach(([ref, routes]) => {
-      const types = [...new Set(routes.map((route) => routeType(route)))];
-      const typeLabel = types.map((type) => TYPE_NAMES[type] || TYPE_NAMES.other).join(' / ');
-      select.add(new Option(`${ref} · ${typeLabel}`, ref));
+    const typeOrder = { tram: 0, trolley: 1, bus: 2, metro: 3, other: 4 };
+    const unique = [...selectableByIdentity.entries()].sort(([, a], [, b]) =>
+      a.ref.localeCompare(b.ref, 'bg', { numeric: true }) ||
+      (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9)
+    );
+    unique.forEach(([value, { ref, type }]) => {
+      const typeLabel = (TYPE_NAMES[type] || TYPE_NAMES.other).toLocaleLowerCase('bg-BG');
+      select.add(new Option(`${ref} ${typeLabel}`, value));
     });
   }
 
@@ -1369,7 +1387,9 @@
 
   function vehicleMatches(vehicle) {
     if (state.selectedType !== 'all' && vehicle.type !== state.selectedType) return false;
-    if (state.selectedRoute !== 'all' && vehicle.normalizedRef !== state.selectedRoute) return false;
+    const selectedRoute = selectedRouteParts();
+    if (selectedRoute && vehicle.normalizedRef !== selectedRoute.ref) return false;
+    if (selectedRoute?.type && vehicle.type !== selectedRoute.type) return false;
     const query = state.query.trim().toLocaleLowerCase('bg-BG');
     if (query) {
       const haystack = [vehicle.routeRef, vehicle.inventory, vehicle.shortInventory, vehicle.destination, resolveNextStop(vehicle), TYPE_NAMES[vehicle.type], vehicle.modelName].join(' ').toLocaleLowerCase('bg-BG');
@@ -1612,9 +1632,12 @@
   function renderRoute(fit = false) {
     if (!state.routeLayer || !state.data) return;
     state.routeLayer.clearLayers();
-    const selectedRef = state.selectedRoute;
-    if (!state.showRoute || selectedRef === 'all') return;
-    const routes = state.routesByRef.get(selectedRef) || [];
+    const selected = selectedRouteParts();
+    if (!state.showRoute || !selected) return;
+    const selectedRef = selected.ref;
+    const routes = (state.routesByRef.get(selectedRef) || []).filter((route) =>
+      !selected.type || routeType(route) === selected.type
+    );
     const lines = [];
     routes.forEach((route) => {
       const directions = state.data.directions?.[route.route_id] || {};
@@ -1642,9 +1665,12 @@
     if (!state.map || !state.data || !state.showStops || state.map.getZoom() < 14) return [];
     const bounds = state.map.getBounds();
     let allowed = null;
-    if (state.selectedRoute !== 'all') {
+    const selected = selectedRouteParts();
+    if (selected) {
       allowed = new Set();
-      (state.routesByRef.get(state.selectedRoute) || []).forEach((route) => {
+      (state.routesByRef.get(selected.ref) || [])
+        .filter((route) => !selected.type || routeType(route) === selected.type)
+        .forEach((route) => {
         Object.values(state.data.directions?.[route.route_id] || {}).forEach((direction) => {
           (direction.stops || []).forEach((stop) => allowed.add(String(stop.stop_id ?? stop.id ?? '')));
           (direction.pattern || []).forEach((id) => allowed.add(String(id)));
