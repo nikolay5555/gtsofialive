@@ -1186,8 +1186,10 @@
         routeCatalog = await fallbackResponse.json();
       }
       if (!Array.isArray(routeCatalog)) throw new Error('Невалиден GTFS route catalog');
+      // The reference live map excludes metro from its route lookup; keep the
+      // same ground-transport scope (bus, tram, trolley) here as well.
       state.routesByCgmId = new Map(routeCatalog
-        .filter((item) => item?.cgm_id && item?.route_ref && item?.type)
+        .filter((item) => item?.cgm_id && item?.route_ref && item?.type && String(item.type).toLowerCase() !== 'metro')
         .map((item) => [String(item.cgm_id), item]));
 
       state.stops = (data.stops || []).map((stop) => ({
