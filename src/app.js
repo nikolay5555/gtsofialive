@@ -119,6 +119,21 @@
     return palette[type] || palette.other;
   }
 
+  function routeForVehicleColor(vehicle) {
+    const direct = vehicle?.gtfsRouteId
+      ? state.routesById.get(String(vehicle.gtfsRouteId))
+      : null;
+    if (direct) return direct;
+    const options = vehicle?.normalizedRef
+      ? (state.routesByRef.get(normaliseRef(vehicle.normalizedRef)) || [])
+      : [];
+    return options.find((route) => routeType(route) === vehicle.type) || (options.length === 1 ? options[0] : null);
+  }
+
+  function vehicleRouteColor(vehicle) {
+    return routeColor(routeForVehicleColor(vehicle), vehicle?.routeRef, vehicle?.type || 'other');
+  }
+
   function catalogRouteForVehicle(raw) {
     const cgmIds = [
       raw?.cgm_route_id,
@@ -299,6 +314,7 @@
     const destinationFields = ['trip_headsign', 'tripHeadsign', 'destination', 'headsign'];
     const hasRouteIdField = hasOwnAny(raw, routeIdFields) || hasOwnAny(raw.route, ['route_id', 'gtfs_route_id']);
     const hasRouteRefField = hasOwnAny(raw, routeRefFields) || hasOwnAny(raw.route, ['route_short_name']);
+    const hasRouteAssignmentField = hasRouteIdField || hasRouteRefField;
     const hasTypeField = hasOwnAny(raw, vehicleTypeFields) || hasOwnAny(raw.route, ['route_type']);
     const hasDestinationStopField = hasOwnAny(raw, destinationStopFields);
     const hasNextStopField = hasOwnAny(raw, nextStopFields);
@@ -313,6 +329,10 @@
       const fallbackRoute = state.routesById.get(routeId);
       if (fallbackRoute) ref = cleanValue(routeRef(fallbackRoute));
     }
+    // An explicitly supplied but empty route assignment means the vehicle is
+    // no longer serving a public line. A snapshot that omits route fields is
+    // different: it is merely partial and should not erase the cached route.
+    const hasExplicitNoRoute = hasRouteAssignmentField && !routeId && !ref && !catalogRoute && !route;
     let type = normaliseType(firstClean(raw.type, raw.vehicle_type, raw.vehicleType, raw.transport_type, raw.transportType, raw.route_type, raw.routeType, catalogRoute?.type), ref, route, raw);
     if (type === 'other' && window.GTSOFIA_VEHICLE_MODELS?.get_vehicle_type_by_inventory) {
       const guessedType = window.GTSOFIA_VEHICLE_MODELS.get_vehicle_type_by_inventory({
@@ -377,6 +397,9 @@
       modelName,
       hasRouteIdField,
       hasRouteRefField,
+      hasRouteAssignmentField,
+      hasExplicitNoRoute,
+      assignedToRoute: Boolean(ref),
       hasTypeField,
       hasDestinationStopField,
       hasNextStopField,
@@ -476,7 +499,16 @@
         visualStart = [current.lat, current.lng];
       } catch (_) { /* retain last interpolated position */ }
     }
+
     const merged = { ...previous, ...incoming };
+    const routeChanged = Boolean(
+      (incoming.hasRouteRefField && incoming.normalizedRef && previous.normalizedRef && incoming.normalizedRef !== previous.normalizedRef) ||
+      (incoming.hasRouteIdField && incoming.routeId && previous.routeId && incoming.routeId !== previous.routeId)
+    );
+    const clearRouteAssignment = Boolean(
+      incoming.hasExplicitNoRoute || (routeChanged && !cleanValue(incoming.routeRef))
+    );
+
     const preserveWhenMissing = [
       'cgmId', 'inventory', 'shortInventory', 'speed', 'timestamp', 'car',
       'occupancy', 'scheduledTime', 'delay', 'bearing', 'hasSourceTimestamp', 'modelName'
@@ -486,56 +518,76 @@
       if (value === null || value === undefined || value === '') merged[key] = previous[key];
     }
 
-    // Match the reference GTFS cache: absent/empty line metadata does not flicker
-    // the last resolved public route while the source sends partial snapshots.
-    if (!cleanValue(incoming.routeId)) merged.routeId = previous.routeId;
-    if (!cleanValue(incoming.gtfsRouteId)) merged.gtfsRouteId = previous.gtfsRouteId;
-    if (!cleanValue(incoming.routeRef)) {
-      merged.routeRef = previous.routeRef || '';
-      merged.normalizedRef = previous.normalizedRef || '';
-      merged.gtfsRouteId = previous.gtfsRouteId || merged.gtfsRouteId || '';
-      if (previous.color) merged.color = previous.color;
+    if (clearRouteAssignment) {
+      // Do not keep a stale line/destination when the feed explicitly removes
+      // the route assignment or changes to an unresolved route.
+      merged.routeRef = '';
+      merged.normalizedRef = '';
+      merged.gtfsRouteId = '';
+      merged.assignedToRoute = false;
+      merged.destination = '';
+      merged.destinationStopRef = null;
+      merged.nextStopRef = null;
+      merged.directionId = '';
+      if (incoming.hasExplicitNoRoute) merged.routeId = '';
+    } else {
+      if (!cleanValue(incoming.routeId)) merged.routeId = previous.routeId;
+      if (!cleanValue(incoming.gtfsRouteId)) merged.gtfsRouteId = routeChanged ? '' : previous.gtfsRouteId;
+
+      if (!cleanValue(incoming.routeRef)) {
+        if (routeChanged) {
+          merged.routeRef = '';
+          merged.normalizedRef = '';
+          merged.gtfsRouteId = cleanValue(incoming.gtfsRouteId) || '';
+          merged.assignedToRoute = false;
+        } else {
+          merged.routeRef = previous.routeRef || '';
+          merged.normalizedRef = previous.normalizedRef || '';
+          merged.gtfsRouteId = previous.gtfsRouteId || merged.gtfsRouteId || '';
+          merged.assignedToRoute = Boolean(previous.assignedToRoute && cleanValue(merged.routeRef));
+        }
+      } else {
+        merged.assignedToRoute = true;
+      }
+
+      // Empty/null fields fluctuate in partial GTFS snapshots. Preserve the
+      // last useful value while the vehicle remains on the same route; clear
+      // those fields when a real route change is detected.
+      if (!cleanValue(incoming.destination)) merged.destination = routeChanged ? '' : previous.destination;
+      if (!cleanValue(incoming.destinationStopRef)) merged.destinationStopRef = routeChanged ? null : previous.destinationStopRef;
+      if (!cleanValue(incoming.nextStopRef)) merged.nextStopRef = routeChanged ? null : previous.nextStopRef;
+      if (!cleanValue(incoming.directionId)) merged.directionId = routeChanged ? '' : previous.directionId;
     }
 
-    // Preserve fields omitted by a partial snapshot, but respect explicit empty values.
-    if (!incoming.hasNextStopField) merged.nextStopRef = previous.nextStopRef;
-    if (!incoming.hasDestinationStopField) merged.destinationStopRef = previous.destinationStopRef;
-    if (!incoming.hasDestinationField) merged.destination = previous.destination;
-    if (!incoming.hasDirectionIdField) merged.directionId = previous.directionId;
-
     // Partial feed messages can omit type/model. Do not erase resolved metadata
-    // unless the vehicle's identity genuinely changed.
-    const routeChanged = Boolean(
-      (incoming.hasRouteRefField && incoming.normalizedRef && previous.normalizedRef && incoming.normalizedRef !== previous.normalizedRef) ||
-      (incoming.hasRouteIdField && incoming.routeId && previous.routeId && incoming.routeId !== previous.routeId)
-    );
-    if (incoming.type === 'other' && previous.type && previous.type !== 'other' && !routeChanged) {
+    // unless the route or route assignment genuinely changed.
+    if (incoming.type === 'other' && previous.type && previous.type !== 'other' &&
+        !routeChanged && !incoming.hasExplicitNoRoute) {
       merged.type = previous.type;
     }
     const identityChanged = Boolean(incoming.inventory && previous.inventory && incoming.inventory !== previous.inventory);
     if ((incoming.modelName === 'Неизвестен модел' || incoming.modelName === null) && !identityChanged) merged.modelName = previous.modelName;
-    if (!incoming.hasSourceTimestamp && previous.hasSourceTimestamp) { merged.timestamp = previous.timestamp; merged.hasSourceTimestamp = true; }
+    if (!incoming.hasSourceTimestamp && previous.hasSourceTimestamp) {
+      merged.timestamp = previous.timestamp;
+      merged.hasSourceTimestamp = true;
+    }
     if (incoming.inventory === null) merged.inventory = previous.inventory;
     if (incoming.shortInventory === null) merged.shortInventory = previous.shortInventory;
 
-    // The reference GTFS cache calculates bearing from consecutive positions only
-    // while the vehicle is moving; slow/stationary vehicles use a neutral heading.
+    // Recompute color from the merged route + mode. Never carry the fallback
+    // #111827 forward merely because one snapshot omitted/emptied its metadata.
+    merged.color = vehicleRouteColor(merged);
+
     if (Number(merged.speed) >= MIN_ACTIVE_SPEED) {
       merged.bearing = oldLat === newLat && oldLon === newLon ? 0 : calculateBearing(previous.coords, incoming.coords);
     } else {
       merged.bearing = 0;
     }
-    // Vehicles without a resolved public line number still appear on the map,
-    // using the mode's default color and a dash in the line pill.
-    if (!cleanValue(merged.routeRef)) merged.color = TYPE_COLORS[merged.type] || TYPE_COLORS.other;
-    else if ((incoming.type === 'other' || !incoming.routeId) && previous.color && !incoming.hasRouteRefField) merged.color = previous.color;
 
     const distance = distanceMetersBetween(visualStart, incoming.coords);
     merged.motionFrom = [...visualStart];
     merged.motionTo = [...incoming.coords];
     merged.motionStartedAt = now;
-    // Interpolate normal city-scale updates. Large jumps are usually feed resets
-    // or GPS corrections, so snap rather than drawing an implausible cross-city path.
     merged.motionDuration = distance >= 3 && distance <= 650
       ? Math.round(Math.max(500, Math.min(1400, 420 + distance * 1.55)))
       : 0;
@@ -547,8 +599,6 @@
     merged.marker = previous.marker;
     merged.hidden = false;
     merged.lastSeenAt = now;
-    // Keep one object per vehicle, like add_to_cache() in the reference project.
-    // Existing Leaflet callbacks now see updated fields without recreating the marker.
     Object.assign(previous, merged);
     return previous;
   }
@@ -1334,9 +1384,24 @@
     return nowSeconds - signalTime <= STALE_AFTER_SECONDS;
   }
 
+  function isVehicleOnActiveRoute(vehicle) {
+    return Boolean(
+      vehicle &&
+      vehicle.assignedToRoute &&
+      cleanValue(vehicle.routeRef) &&
+      normaliseRef(vehicle.routeRef) &&
+      ['bus', 'tram', 'trolley', 'metro'].includes(vehicle.type)
+    );
+  }
+
   function getFilteredVehicles() {
     const nowSeconds = Date.now() / 1000;
-    return [...state.vehicles.values()].filter((vehicle) => !vehicle.hidden && isVehicleFresh(vehicle, nowSeconds) && vehicleMatches(vehicle));
+    return [...state.vehicles.values()].filter((vehicle) =>
+      !vehicle.hidden &&
+      isVehicleFresh(vehicle, nowSeconds) &&
+      isVehicleOnActiveRoute(vehicle) &&
+      vehicleMatches(vehicle)
+    );
   }
 
   function cmpVehicles(a, b) {
@@ -1347,7 +1412,9 @@
 
   function updateStats() {
     if (!$('stat-bus') && !$('stat-tram') && !$('stat-trolley')) return;
-    const active = [...state.vehicles.values()].filter((vehicle) => !vehicle.hidden && isVehicleFresh(vehicle));
+    const active = [...state.vehicles.values()].filter((vehicle) =>
+      !vehicle.hidden && isVehicleFresh(vehicle) && isVehicleOnActiveRoute(vehicle)
+    );
     if ($('stat-bus')) $('stat-bus').textContent = active.filter((vehicle) => vehicle.type === 'bus').length;
     if ($('stat-tram')) $('stat-tram').textContent = active.filter((vehicle) => vehicle.type === 'tram').length;
     if ($('stat-trolley')) $('stat-trolley').textContent = active.filter((vehicle) => vehicle.type === 'trolley').length;
@@ -1403,7 +1470,7 @@
     const nowSeconds = Date.now() / 1000;
     state.vehicles.forEach((vehicle, id) => {
       const fresh = isVehicleFresh(vehicle, nowSeconds);
-      if (!fresh || vehicle.hidden || !vehicleMatches(vehicle)) {
+      if (!fresh || vehicle.hidden || !isVehicleOnActiveRoute(vehicle) || !vehicleMatches(vehicle)) {
         if (vehicle.marker && state.vehicleLayer.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
         return;
       }
@@ -1616,7 +1683,7 @@
 
   function findSingleTramByInventory(inventoryNumber) {
     for (const vehicle of state.vehicles.values()) {
-      if (vehicle.type !== 'tram') continue;
+      if (vehicle.type !== 'tram' || !isVehicleOnActiveRoute(vehicle)) continue;
       if (singleTramInventory(vehicle) === inventoryNumber) return vehicle;
     }
     return null;
@@ -1726,18 +1793,20 @@
     applyGTFSTramCompositions();
     state.lastSnapshotAt = now;
     for (const [id, vehicle] of state.vehicles.entries()) {
-      if (!isVehicleFresh(vehicle, nowSeconds)) {
-        if (vehicle.hidden) continue;
+      if (!isVehicleFresh(vehicle, nowSeconds) || !isVehicleOnActiveRoute(vehicle)) {
         if (vehicle.marker && state.vehicleLayer.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
+        const wasVisible = !vehicle.hidden;
         vehicle.marker = null;
         vehicle.hidden = true;
-        if (String(state.selectedVehicleId) === String(id)) {
+        if (wasVisible && String(state.selectedVehicleId) === String(id)) {
           state.selectedVehicleId = null;
           clearSelectedVehicleRoute();
         }
       }
     }
-    const activeCount = [...state.vehicles.values()].filter((vehicle) => !vehicle.hidden && isVehicleFresh(vehicle, nowSeconds)).length;
+    const activeCount = [...state.vehicles.values()].filter((vehicle) =>
+      !vehicle.hidden && isVehicleFresh(vehicle, nowSeconds) && isVehicleOnActiveRoute(vehicle)
+    ).length;
     setConnection('connected', `${CONFIG.sources?.[state.source]?.label || 'ЦГМ'} · ${activeCount} превозни средства`);
     scheduleRender();
   }
