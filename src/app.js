@@ -117,20 +117,32 @@
   }
 
   function routeForVehicle(raw) {
-    const cgmRouteId = firstClean(raw.cgm_route_id, raw.cgmRouteId);
-    const catalog = cgmRouteId ? state.routesByCgmId.get(cgmRouteId) : null;
-    const directId = firstClean(raw.route_id, raw.routeId, raw.route?.route_id);
+    const cgmRouteId = firstClean(raw?.cgm_route_id, raw?.cgmRouteId);
+    const catalogRoute = cgmRouteId ? state.routesByCgmId.get(cgmRouteId) : null;
+    const directId = firstClean(raw?.route_id, raw?.route?.route_id);
     const direct = directId ? state.routesById.get(directId) : null;
     if (direct) return direct;
-    const ref = firstClean(raw.route_ref, raw.routeRef, catalog?.route_ref);
+
+    // Resolve the public route number independently of compact route geometry.
+    const ref = firstClean(raw?.route_ref, raw?.routeRef, catalogRoute?.route_ref);
     if (!ref) return null;
     const options = state.routesByRef.get(normaliseRef(ref)) || [];
-    const type = firstClean(raw.type, catalog?.type);
+    const type = firstClean(raw?.type, catalogRoute?.type);
     if (type) {
-      const typed = options.find((route) => routeType(route) === type);
+      const typed = options.find((route) => routeType(route) === normaliseTransportType(type));
       if (typed) return typed;
     }
     return options.length === 1 ? options[0] : null;
+  }
+
+  function normaliseTransportType(value) {
+    const type = cleanValue(value).toLowerCase();
+    if (type === 'trolleybus') return 'trolley';
+    if (type === '0') return 'tram';
+    if (type === '1') return 'metro';
+    if (type === '3') return 'bus';
+    if (type === '11') return 'trolley';
+    return type;
   }
 
   function toCoordinates(value) {
@@ -211,27 +223,30 @@
       .map(toCoordinates).find(Boolean) || null;
     if (!coords || Math.abs(coords[0]) > 90 || Math.abs(coords[1]) > 180) return null;
 
-    const route = routeForVehicle(raw);
     const routeId = firstClean(raw.cgm_route_id, raw.cgmRouteId, raw.route_id, raw.routeId, raw.route?.route_id);
+    const catalogRoute = state.routesByCgmId.get(firstClean(raw.cgm_route_id, raw.cgmRouteId)) || null;
+    const route = routeForVehicle(raw);
     const rawId = firstClean(raw.cgm_id, raw.vehicle_id, raw.vehicleId, raw.id, raw.inv_number, raw.inventory_number, raw.full_inv_number);
     if (!rawId) return null;
     const routeIdFields = ['cgm_route_id', 'cgmRouteId', 'route_id', 'routeId'];
     const routeRefFields = ['route_ref', 'routeRef', 'route_short_name', 'routeShortName', 'line', 'line_number', 'lineNumber'];
-    const nextStopFields = ['destination_stop', 'destinationStop', 'next_stop', 'nextStop', 'destination_stop_code', 'destinationStopCode', 'stop_code', 'stopCode'];
+    const destinationStopFields = ['destination_stop', 'destinationStop', 'destination_stop_code', 'destinationStopCode'];
+    const nextStopFields = ['next_stop', 'nextStop', 'next_stop_code', 'nextStopCode'];
     const destinationFields = ['trip_headsign', 'tripHeadsign', 'destination', 'headsign'];
     const hasRouteIdField = hasOwnAny(raw, routeIdFields) || hasOwnAny(raw.route, ['route_id']);
     const hasRouteRefField = hasOwnAny(raw, routeRefFields) || hasOwnAny(raw.route, ['route_short_name']);
+    const hasDestinationStopField = hasOwnAny(raw, destinationStopFields);
     const hasNextStopField = hasOwnAny(raw, nextStopFields);
     const hasDestinationField = hasOwnAny(raw, destinationFields) || (Object.prototype.hasOwnProperty.call(raw, 'direction') && !/^D\d+$/i.test(cleanValue(raw.direction)));
     const idBasedInventory = /^\d{3,6}$/.test(rawId) ? rawId : null;
     const override = getOverride(routeId);
     const explicitRef = firstClean(raw.route_ref, raw.routeRef, raw.route_short_name, raw.routeShortName, raw.line, raw.line_number, raw.lineNumber, raw.route?.route_short_name);
-    let ref = explicitRef || cleanValue(routeRef(route)) || cleanValue(override?.route_ref);
+    let ref = explicitRef || cleanValue(catalogRoute?.route_ref) || cleanValue(routeRef(route)) || cleanValue(override?.route_ref);
     if (!ref && routeId) {
       const fallbackRoute = state.routesById.get(routeId);
       if (fallbackRoute) ref = cleanValue(routeRef(fallbackRoute));
     }
-    let type = normaliseType(raw.type ?? raw.vehicle_type ?? raw.vehicleType ?? raw.transport_type ?? raw.transportType ?? raw.route_type ?? raw.routeType, ref, route, raw);
+    let type = normaliseType(raw.type ?? raw.vehicle_type ?? raw.vehicleType ?? raw.transport_type ?? raw.transportType ?? raw.route_type ?? raw.routeType ?? catalogRoute?.type, ref, route, raw);
     if (type === 'other' && window.GTSOFIA_VEHICLE_MODELS?.get_vehicle_type_by_inventory) {
       const guessedType = window.GTSOFIA_VEHICLE_MODELS.get_vehicle_type_by_inventory({
         inv_number: firstClean(raw.inv_number, raw.inventory_number, raw.inventoryNumber, raw.full_inv_number, raw.fullInventoryNumber, idBasedInventory),
@@ -251,7 +266,8 @@
     const inventory = inventoryRaw === null || inventoryRaw === undefined || cleanValue(inventoryRaw) === '' ? null : String(inventoryRaw);
     const shortInventoryRaw = firstClean(raw.inv_number, raw.inventory_number, raw.inventoryNumber, raw.full_inv_number, raw.fullInventoryNumber, idBasedInventory);
     const shortInventory = shortInventoryRaw === null || shortInventoryRaw === undefined || cleanValue(shortInventoryRaw) === '' ? null : String(shortInventoryRaw);
-    const rawNextStop = firstClean(raw.destination_stop, raw.destinationStop, raw.next_stop, raw.nextStop, raw.destination_stop_code, raw.destinationStopCode, raw.stop_code, raw.stopCode) || null;
+    const rawDestinationStop = firstClean(...destinationStopFields.map((field) => raw[field])) || null;
+    const rawNextStop = firstClean(...nextStopFields.map((field) => raw[field])) || null;
     const directDirectionText = cleanValue(raw.direction);
     const destinationText = firstClean(raw.trip_headsign, raw.tripHeadsign, raw.destination, raw.headsign,
       (/^D\d+$/i.test(directDirectionText) ? '' : directDirectionText));
@@ -284,6 +300,7 @@
       hasSourceTimestamp: parsedTimestamp !== null,
       car: raw.car ?? null,
       destination: String(destinationText ?? '').trim(),
+      destinationStopRef: rawDestinationStop,
       directionId: cleanValue(rawDirectionId || (/^D\d+$/i.test(cleanValue(raw.direction)) ? raw.direction : '')),
       nextStopRef: rawNextStop === null || rawNextStop === undefined || cleanValue(rawNextStop) === '' ? null : cleanValue(rawNextStop),
       occupancy: raw.occupancy ?? null,
@@ -294,6 +311,7 @@
       modelName,
       hasRouteIdField,
       hasRouteRefField,
+      hasDestinationStopField,
       hasNextStopField,
       hasDestinationField,
       lastSeenAt: Date.now(),
@@ -456,14 +474,20 @@
     return /^\d+$/.test(text) ? text.padStart(4, '0') : text.toUpperCase();
   }
 
+  function stopByReference(value) {
+    const ref = cleanValue(value);
+    if (!ref) return null;
+    return state.stopsByKey.get(ref) || state.stopsByKey.get(stopCodeKey(ref)) || null;
+  }
+
   function resolveNextStop(vehicle) {
-    const ref = String(vehicle.nextStopRef ?? '').trim();
+    const ref = cleanValue(vehicle.nextStopRef);
     if (ref) {
-      const stop = state.stopsByKey.get(ref) || state.stopsByKey.get(stopCodeKey(ref));
+      const stop = stopByReference(ref);
       if (stop) return `${stop.name} [${String(stop.code).padStart(4, '0')}]`;
-      if (/^\d{3,5}$/.test(ref)) return `Спирка [${stopCodeKey(ref)}]`;
+      if (/^\\d{3,5}$/.test(ref)) return `Спирка [${stopCodeKey(ref)}]`;
     }
-    return vehicle.destination || 'Няма данни за следваща спирка';
+    return 'Няма данни за следваща спирка';
   }
 
   function normaliseDirectionText(value) {
@@ -472,11 +496,14 @@
 
   function directionStopMatches(ref, patternStop) {
     const a = cleanValue(ref);
-    const b = cleanValue(patternStop);
+    const rawStop = patternStop && typeof patternStop === 'object'
+      ? firstClean(patternStop.stop_code, patternStop.stop_id, patternStop.stopCode, patternStop.stopId, patternStop.code, patternStop.id)
+      : patternStop;
+    const b = cleanValue(rawStop);
     if (!a || !b) return false;
     if (stopCodeKey(a) === stopCodeKey(b)) return true;
-    const stopA = state.stopsByKey.get(a) || state.stopsByKey.get(stopCodeKey(a));
-    const stopB = state.stopsByKey.get(b) || state.stopsByKey.get(stopCodeKey(b));
+    const stopA = stopByReference(a);
+    const stopB = stopByReference(b);
     if (stopA && stopB && String(stopA.id) === String(stopB.id)) return true;
     if (stopA && (String(stopA.id) === b || stopCodeKey(stopA.code) === stopCodeKey(b))) return true;
     if (stopB && (String(stopB.id) === a || stopCodeKey(stopB.code) === stopCodeKey(a))) return true;
@@ -539,7 +566,7 @@
 
     const dirToken = normaliseRef(vehicle.directionId);
     const destinationText = normaliseDirectionText(vehicle.destination);
-    const nextRef = cleanValue(vehicle.nextStopRef);
+    const destinationRef = cleanValue(vehicle.destinationStopRef);
     let best = null;
     let bestScore = Infinity;
     for (const candidate of candidates) {
@@ -558,8 +585,12 @@
       }
 
       const pattern = Array.isArray(direction.pattern) ? direction.pattern : [];
-      if (nextRef && pattern.length) {
-        if (directionStopMatches(nextRef, pattern[0]) || directionStopMatches(nextRef, pattern[pattern.length - 1])) score -= 1500;
+      if (destinationRef && pattern.length) {
+        const startsAtDestination = directionStopMatches(destinationRef, pattern[0]);
+        const endsAtDestination = directionStopMatches(destinationRef, pattern[pattern.length - 1]);
+        if (endsAtDestination) score -= 12_000;
+        else if (startsAtDestination) score += 12_000;
+        else if (pattern.some((stop) => directionStopMatches(destinationRef, stop))) score -= 250;
       }
 
       const metrics = pointToShapeMetrics(vehicle.coords, shape, vehicle.bearing);
@@ -575,11 +606,22 @@
   }
 
   function resolveVehicleDestination(vehicle) {
+    // Match Dimitar's GTFS popup: destination_stop -> stop.code -> names.bg.
+    const destinationStop = stopByReference(vehicle.destinationStopRef);
+    if (destinationStop?.name) return destinationStop.name;
+
+    const directText = cleanValue(vehicle.destination);
+    if (directText && !/^\\d{3,5}$/.test(directText)) return directText;
+
     const selected = getVehicleRouteDirection(vehicle);
     const destination = selected?.direction?.destination || selected?.direction?.headsign;
     if (destination) return String(destination);
-    const directText = cleanValue(vehicle.destination);
-    if (directText && !/^\d{3,5}$/.test(directText)) return directText;
+
+    const pattern = selected?.direction?.pattern;
+    if (Array.isArray(pattern) && pattern.length) {
+      const terminal = stopByReference(pattern[pattern.length - 1]);
+      if (terminal?.name) return terminal.name;
+    }
     return 'Няма данни за дестинацията';
   }
 
@@ -993,16 +1035,15 @@
         if (!state.routesByRef.has(ref)) state.routesByRef.set(ref, []);
         state.routesByRef.get(ref).push(route);
       });
-      // Static route catalog mirrors the GTFS mapping used by Dimitar's map.
-      try {
-        const catalogResponse = await fetch('https://raw.githubusercontent.com/Dimitar5555/sofiatraffic-schedules/master/data/routes.json', { cache: 'force-cache' });
-        if (catalogResponse.ok) {
-          const catalog = await catalogResponse.json();
-          state.routesByCgmId = new Map(catalog.filter((item) => item?.cgm_id && item?.type && item.type !== 'metro').map((item) => [String(item.cgm_id), item]));
-        }
-      } catch (catalogError) {
-        console.warn('GTFS route catalog unavailable; using embedded route data only.', catalogError);
-      }
+      // Bundle the exact route catalog used by Dimitar to avoid a cross-origin
+      // lookup silently failing when the live map starts.
+      const routeCatalogResponse = await fetch('./data/route-catalog.json', { cache: 'force-cache' });
+      if (!routeCatalogResponse.ok) throw new Error(`HTTP ${routeCatalogResponse.status} loading route catalog`);
+      const routeCatalog = await routeCatalogResponse.json();
+      state.routesByCgmId = new Map(routeCatalog
+        .filter((item) => item?.cgm_id && item?.route_ref && item?.type && item.type !== 'metro')
+        .map((item) => [String(item.cgm_id), item]));
+
       state.stops = (data.stops || []).map((stop) => ({
         id: String(stop.stop_id ?? stop.stop_code ?? ''),
         code: String(stop.stop_code ?? stop.stop_id ?? ''),
@@ -1015,6 +1056,19 @@
           if (key && !state.stopsByKey.has(String(key))) state.stopsByKey.set(String(key), stop);
         }
       });
+
+      // Use the same Bulgarian stop names as Dimitar's destination-stop lookup.
+      const stopCatalogResponse = await fetch('./data/stop-catalog.json', { cache: 'force-cache' });
+      if (!stopCatalogResponse.ok) throw new Error(`HTTP ${stopCatalogResponse.status} loading stop catalog`);
+      const stopCatalog = await stopCatalogResponse.json();
+      for (const item of stopCatalog) {
+        if (!item?.code || !item?.name) continue;
+        const code = String(item.code);
+        const coords = Array.isArray(item.coords) ? item.coords : [0, 0];
+        const stop = { id: code, code, name: item.name, lat: Number(coords[0]) || 0, lon: Number(coords[1]) || 0 };
+        state.stopsByKey.set(code, stop);
+        state.stopsByKey.set(stopCodeKey(code), stop);
+      }
       populateLineFilter();
       if ($('static-data-date')) $('static-data-date').textContent = data.updatedAt ? `CGM GTFS · ${data.updatedAt}` : 'CGM Sofia · GTFS';
       renderRoute();
