@@ -7,6 +7,7 @@
   const STALE_AFTER = CONFIG.refreshStaleAfterMs || 120_000;
   const STALE_AFTER_SECONDS = STALE_AFTER / 1000;
   const RECONNECT_DELAY = CONFIG.reconnectDelayMs || 2500;
+  const MIN_ACTIVE_SPEED = Number(CONFIG.minActiveSpeed) || 3;
   const TYPE_NAMES = { bus: 'Автобус', tram: 'Трамвай', trolley: 'Тролей', metro: 'Метро', other: 'Транспорт' };
   const TYPE_COLORS = { bus: '#BE1E2D', tram: '#F7941D', trolley: '#27AAE1', metro: '#1C75BC', other: '#111827' };
   const FAKE_TROLLEY_ROUTES = new Set(['60', '73', '74', '123', '288', '801']);
@@ -138,6 +139,41 @@
       return state.routesByCgmId.get(possibleId) || null;
     }
     return null;
+  }
+
+  function prepareGTFSRecord(raw) {
+    if (!raw || typeof raw !== 'object') return raw;
+    const vehicle = { ...raw };
+    const catalogRoute = catalogRouteForVehicle(vehicle);
+
+    // The reference GTFS handler first resolves route_ref and type from cgm_route_id.
+    const rawRef = firstClean(vehicle.route_ref, vehicle.routeRef, vehicle.route_short_name,
+      vehicle.routeShortName, vehicle.line, vehicle.line_number, vehicle.lineNumber,
+      vehicle.route?.route_short_name);
+    if (!rawRef && catalogRoute?.route_ref) vehicle.route_ref = catalogRoute.route_ref;
+
+    const rawType = firstClean(vehicle.type, vehicle.vehicle_type, vehicle.vehicleType,
+      vehicle.transport_type, vehicle.transportType, vehicle.category,
+      vehicle.route_type, vehicle.routeType, vehicle.route?.route_type, vehicle.route?.type);
+    if (!rawType && catalogRoute?.type) vehicle.type = catalogRoute.type;
+
+    const ref = firstClean(vehicle.route_ref, vehicle.routeRef, vehicle.route_short_name,
+      vehicle.routeShortName, vehicle.line, vehicle.line_number, vehicle.lineNumber);
+    const type = normaliseTransportType(firstClean(vehicle.type, vehicle.vehicle_type,
+      vehicle.vehicleType, vehicle.transport_type, vehicle.transportType, vehicle.category,
+      vehicle.route_type, vehicle.routeType, vehicle.route?.route_type, vehicle.route?.type,
+      catalogRoute?.type));
+    // Temporary timetable labels ending in TM/TБ are bus lines in the reference feed.
+    if (type !== 'bus' && ref && /(TM|ТМ|TB|ТБ)$/i.test(ref)) vehicle.type = 'bus';
+
+    const inventory = firstClean(vehicle.inv_number, vehicle.inventory_number,
+      vehicle.inventoryNumber, vehicle.full_inv_number, vehicle.fullInventoryNumber);
+    const inventoryNumber = Number.parseInt(inventory.split(/[+/]/)[0], 10);
+    if (type === 'trolley' && (FAKE_TROLLEY_ROUTES.has(normaliseRef(ref)) ||
+        (Number.isFinite(inventoryNumber) && inventoryNumber >= 5000 && inventoryNumber < 6000))) {
+      vehicle.type = 'bus';
+    }
+    return vehicle;
   }
 
   function routeForVehicle(raw) {
@@ -276,7 +312,7 @@
       const fallbackRoute = state.routesById.get(routeId);
       if (fallbackRoute) ref = cleanValue(routeRef(fallbackRoute));
     }
-    let type = normaliseType(raw.type ?? raw.vehicle_type ?? raw.vehicleType ?? raw.transport_type ?? raw.transportType ?? raw.route_type ?? raw.routeType ?? catalogRoute?.type, ref, route, raw);
+    let type = normaliseType(firstClean(raw.type, raw.vehicle_type, raw.vehicleType, raw.transport_type, raw.transportType, raw.route_type, raw.routeType, catalogRoute?.type), ref, route, raw);
     if (type === 'other' && window.GTSOFIA_VEHICLE_MODELS?.get_vehicle_type_by_inventory) {
       const guessedType = window.GTSOFIA_VEHICLE_MODELS.get_vehicle_type_by_inventory({
         inv_number: firstClean(raw.inv_number, raw.inventory_number, raw.inventoryNumber, raw.full_inv_number, raw.fullInventoryNumber, idBasedInventory),
@@ -449,16 +485,11 @@
       if (value === null || value === undefined || value === '') merged[key] = previous[key];
     }
 
-    // Preserve route metadata only when its fields are omitted. An explicit empty
-    // route update must not silently keep showing the previous line.
-    if (!incoming.hasRouteIdField) {
-      merged.routeId = previous.routeId;
-      merged.gtfsRouteId = previous.gtfsRouteId;
-    }
-
-    if (!cleanValue(incoming.routeRef) && !incoming.hasRouteRefField && !incoming.hasRouteIdField) {
-      // Partial snapshots sometimes omit both the line and route ID; retain the
-      // last known line in that case, but never override an explicit route update.
+    // Match the reference GTFS cache: absent/empty line metadata does not flicker
+    // the last resolved public route while the source sends partial snapshots.
+    if (!cleanValue(incoming.routeId)) merged.routeId = previous.routeId;
+    if (!cleanValue(incoming.gtfsRouteId)) merged.gtfsRouteId = previous.gtfsRouteId;
+    if (!cleanValue(incoming.routeRef)) {
       merged.routeRef = previous.routeRef || '';
       merged.normalizedRef = previous.normalizedRef || '';
       merged.gtfsRouteId = previous.gtfsRouteId || merged.gtfsRouteId || '';
@@ -477,7 +508,7 @@
       (incoming.hasRouteRefField && incoming.normalizedRef && previous.normalizedRef && incoming.normalizedRef !== previous.normalizedRef) ||
       (incoming.hasRouteIdField && incoming.routeId && previous.routeId && incoming.routeId !== previous.routeId)
     );
-    if (incoming.type === 'other' && previous.type && previous.type !== 'other' && !incoming.hasTypeField && !routeChanged) {
+    if (incoming.type === 'other' && previous.type && previous.type !== 'other' && !routeChanged) {
       merged.type = previous.type;
     }
     const identityChanged = Boolean(incoming.inventory && previous.inventory && incoming.inventory !== previous.inventory);
@@ -486,8 +517,12 @@
     if (incoming.inventory === null) merged.inventory = previous.inventory;
     if (incoming.shortInventory === null) merged.shortInventory = previous.shortInventory;
 
-    if ((!Number.isFinite(merged.bearing) || merged.bearing === 0) && (oldLat !== newLat || oldLon !== newLon)) {
-      merged.bearing = calculateBearing(previous.coords, incoming.coords);
+    // The reference GTFS cache calculates bearing from consecutive positions only
+    // while the vehicle is moving; slow/stationary vehicles use a neutral heading.
+    if (Number(merged.speed) >= MIN_ACTIVE_SPEED) {
+      merged.bearing = oldLat === newLat && oldLon === newLon ? 0 : calculateBearing(previous.coords, incoming.coords);
+    } else {
+      merged.bearing = 0;
     }
     // Vehicles without a resolved public line number still appear on the map,
     // using the mode's default color and a dash in the line pill.
@@ -509,8 +544,12 @@
     if (merged.inventory === null || merged.inventory === undefined || merged.inventory === '') merged.inventory = null;
     if (merged.shortInventory === null || merged.shortInventory === undefined || merged.shortInventory === '') merged.shortInventory = merged.inventory;
     merged.marker = previous.marker;
+    merged.hidden = false;
     merged.lastSeenAt = now;
-    return merged;
+    // Keep one object per vehicle, like add_to_cache() in the reference project.
+    // Existing Leaflet callbacks now see updated fields without recreating the marker.
+    Object.assign(previous, merged);
+    return previous;
   }
 
   function stopCodeKey(value) {
@@ -1125,11 +1164,28 @@
         if (!state.routesByRef.has(ref)) state.routesByRef.set(ref, []);
         state.routesByRef.get(ref).push(route);
       });
-      // Bundle the exact route catalog used by Dimitar to avoid a cross-origin
-      // lookup silently failing when the live map starts.
-      const routeCatalogResponse = await fetch('./data/route-catalog.json', { cache: 'no-cache' });
-      if (!routeCatalogResponse.ok) throw new Error(`HTTP ${routeCatalogResponse.status} loading route catalog`);
-      const routeCatalog = await routeCatalogResponse.json();
+      // Use the exact route metadata source used by the reference GTFS map.
+      // A synchronized local copy remains the fallback if GitHub is unavailable.
+      let routeCatalog = null;
+      try {
+        const remoteCatalogUrl = CONFIG.routeCatalogUrl ||
+          'https://raw.githubusercontent.com/Dimitar5555/sofiatraffic-schedules/master/data/routes.json';
+        const remoteResponse = await fetch(remoteCatalogUrl, { cache: 'no-cache' });
+        if (remoteResponse.ok) {
+          const candidate = await remoteResponse.json();
+          if (Array.isArray(candidate) && candidate.some((item) => item?.cgm_id && item?.route_ref && item?.type)) {
+            routeCatalog = candidate;
+          }
+        }
+      } catch (error) {
+        console.warn('Не е достъпен онлайн GTFS каталогът; използваме локалното копие.', error);
+      }
+      if (!routeCatalog) {
+        const fallbackResponse = await fetch('./data/route-catalog.json', { cache: 'no-cache' });
+        if (!fallbackResponse.ok) throw new Error(`HTTP ${fallbackResponse.status} loading route catalog fallback`);
+        routeCatalog = await fallbackResponse.json();
+      }
+      if (!Array.isArray(routeCatalog)) throw new Error('Невалиден GTFS route catalog');
       state.routesByCgmId = new Map(routeCatalog
         .filter((item) => item?.cgm_id && item?.route_ref && item?.type)
         .map((item) => [String(item.cgm_id), item]));
@@ -1542,7 +1598,7 @@
     const now = Date.now();
     const nowSeconds = now / 1000;
     for (const raw of vehicles) {
-      const incoming = normaliseVehicle(raw);
+      const incoming = normaliseVehicle(prepareGTFSRecord(raw));
       if (!incoming) continue;
       const previous = state.vehicles.get(incoming.id);
       // Do not create a new marker from an untimestamped record, but permit a
@@ -1561,14 +1617,13 @@
         const inferredType = matchedDirection ? routeType(matchedDirection.route) : 'other';
         if (['bus', 'tram', 'trolley'].includes(inferredType)) {
           const inferredRef = vehicle.routeRef || routeRef(matchedDirection.route);
-          vehicle = {
-            ...vehicle,
+          Object.assign(vehicle, {
             type: inferredType,
             gtfsRouteId: vehicle.gtfsRouteId || String(matchedDirection.route.route_id || ''),
             routeRef: inferredRef,
             normalizedRef: normaliseRef(inferredRef),
             color: routeColor(matchedDirection.route, inferredRef, inferredType)
-          };
+          });
           vehicle.marker = previous?.marker || vehicle.marker;
         }
       }
@@ -1577,11 +1632,18 @@
     state.lastSnapshotAt = now;
     for (const [id, vehicle] of state.vehicles.entries()) {
       if (!isVehicleFresh(vehicle, nowSeconds)) {
+        if (vehicle.hidden) continue;
         if (vehicle.marker && state.vehicleLayer.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
-        state.vehicles.delete(id);
+        vehicle.marker = null;
+        vehicle.hidden = true;
+        if (String(state.selectedVehicleId) === String(id)) {
+          state.selectedVehicleId = null;
+          clearSelectedVehicleRoute();
+        }
       }
     }
-    setConnection('connected', `${CONFIG.sources?.[state.source]?.label || 'ЦГМ'} · ${state.vehicles.size} превозни средства`);
+    const activeCount = [...state.vehicles.values()].filter((vehicle) => isVehicleFresh(vehicle, nowSeconds)).length;
+    setConnection('connected', `${CONFIG.sources?.[state.source]?.label || 'ЦГМ'} · ${activeCount} превозни средства`);
     scheduleRender();
   }
 
@@ -1609,17 +1671,29 @@
     return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
   }
 
+  function scheduleSocketReconnect(generation, message) {
+    if (generation !== state.socketGeneration || state.reconnectTimer !== null) return;
+    setConnection('error', message || 'Ще опитаме повторно автоматично');
+    state.reconnectTimer = setTimeout(() => {
+      state.reconnectTimer = null;
+      if (generation === state.socketGeneration) connectSocket();
+    }, RECONNECT_DELAY);
+  }
+
   function connectSocket() {
     if (!window.WebSocket) {
       setConnection('error', 'Браузърът не поддържа WebSocket.');
       return;
     }
-    const sourceConfig = CONFIG.sources?.[state.source];
+    // This app deliberately uses the same GTFS endpoint as the reference map.
+    const sourceConfig = CONFIG.sources?.gtfs;
     if (!sourceConfig?.url) {
-      setConnection('error', 'Не е конфигуриран live източник.');
+      setConnection('error', 'Не е конфигуриран GTFS WebSocket източник.');
       return;
     }
+
     clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
     const generation = ++state.socketGeneration;
     if (state.socket) {
       const previous = state.socket;
@@ -1629,6 +1703,7 @@
       previous.close();
       state.socket = null;
     }
+
     setConnection('connecting', `Източник: ${sourceConfig.label}`);
     try {
       const socket = new WebSocket(sourceConfig.url);
@@ -1642,23 +1717,20 @@
         try {
           receiveSnapshot(JSON.parse(event.data));
         } catch (error) {
-          console.warn('Неразпознато live съобщение:', error);
+          console.warn('Неразпознато GTFS live съобщение:', error);
         }
       };
       socket.onerror = () => {
-        if (generation === state.socketGeneration) setConnection('connecting', 'Временно прекъсване на потока');
+        if (generation !== state.socketGeneration) return;
+        scheduleSocketReconnect(generation, 'Временно прекъсване на GTFS потока');
       };
       socket.onclose = () => {
         if (generation !== state.socketGeneration) return;
-        setConnection('error', 'Ще опитаме повторно автоматично');
-        state.reconnectTimer = setTimeout(() => {
-          if (generation === state.socketGeneration) connectSocket();
-        }, RECONNECT_DELAY);
+        scheduleSocketReconnect(generation, 'GTFS връзката прекъсна; ще опитаме повторно');
       };
     } catch (error) {
-      console.error('Неуспешна WebSocket връзка:', error);
-      setConnection('error', 'Неуспешна връзка. Повторен опит след малко.');
-      state.reconnectTimer = setTimeout(connectSocket, RECONNECT_DELAY);
+      console.error('Неуспешна GTFS WebSocket връзка:', error);
+      scheduleSocketReconnect(generation, 'Неуспешна GTFS връзка. Повторен опит след малко.');
     }
   }
 
@@ -1774,10 +1846,14 @@
       const nowSeconds = Date.now() / 1000;
       let removed = false;
       for (const [id, vehicle] of state.vehicles.entries()) {
-        if (isVehicleFresh(vehicle, nowSeconds)) continue;
+        if (isVehicleFresh(vehicle, nowSeconds) || vehicle.hidden) continue;
         if (vehicle.marker && state.vehicleLayer?.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
-        if (state.selectedVehicleId === id) { state.selectedVehicleId = null; clearSelectedVehicleRoute(); }
-        state.vehicles.delete(id);
+        vehicle.marker = null;
+        vehicle.hidden = true;
+        if (String(state.selectedVehicleId) === String(id)) {
+          state.selectedVehicleId = null;
+          clearSelectedVehicleRoute();
+        }
         removed = true;
       }
       if (removed) scheduleRender();
@@ -1797,8 +1873,11 @@
   async function init() {
     initMap();
     bindUI();
-    await loadMapData();
-    // Live data can still be available even if the static route dataset fails to load.
+    const loaded = await loadMapData();
+    if (!loaded) {
+      setConnection('error', 'GTFS картографските данни не се заредиха; live свързването е спряно.');
+      return;
+    }
     connectSocket();
   }
 
