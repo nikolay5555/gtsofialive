@@ -430,3 +430,13 @@ body.dark-theme {
   .filter-control .field-label { margin: 2px 0 5px; }
   .filter-control .select-field { width: 100%; }
 }
+
+
+/* v4: destination-first popup with compact vehicle metadata */
+.vehicle-popup-top { align-items: flex-start; }
+.vehicle-popup-heading { flex: 1 1 auto; min-width: 0; }
+.vehicle-popup-destination-line { display: flex; align-items: flex-start; gap: 7px; min-width: 0; }
+.vehicle-popup-destination-line img { width: 10px; height: 13px; flex: 0 0 10px; margin-top: 1px; object-fit: contain; }
+.vehicle-popup-destination-line strong { min-width: 0; overflow-wrap: anywhere; font-size: 11px; line-height: 1.25; color: #111827; }
+.vehicle-popup-model { margin: -2px 0 8px; padding: 0 8px; color: #4b5563; font-size: 10px; line-height: 1.25; overflow-wrap: anywhere; }
+.selected-vehicle-route { filter: none !important; }

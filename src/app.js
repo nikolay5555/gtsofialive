@@ -234,6 +234,7 @@
     const shortInventory = shortInventoryRaw === null || shortInventoryRaw === undefined || cleanValue(shortInventoryRaw) === '' ? null : String(shortInventoryRaw);
     const rawNextStop = raw.destination_stop ?? raw.destinationStop ?? raw.next_stop ?? raw.nextStop ?? raw.destination_stop_code ?? raw.destinationStopCode ?? raw.stop_code ?? raw.stopCode ?? null;
     const destinationText = raw.trip_headsign ?? raw.tripHeadsign ?? raw.destination ?? raw.headsign ?? raw.direction ?? '';
+    const rawDirectionId = raw.direction_id ?? raw.directionId ?? raw.direction_key ?? raw.directionKey ?? raw.route_direction_id ?? raw.routeDirectionId ?? '';
     let modelName = null;
     const modelApi = window.GTSOFIA_VEHICLE_MODELS;
     if (modelApi && shortInventory && ['bus', 'tram', 'trolley'].includes(type)) {
@@ -260,6 +261,7 @@
       hasSourceTimestamp: parsedTimestamp !== null,
       car: raw.car ?? null,
       destination: String(destinationText ?? '').trim(),
+      directionId: cleanValue(rawDirectionId || (/^D\d+$/i.test(cleanValue(raw.direction)) ? raw.direction : '')),
       nextStopRef: rawNextStop === null || rawNextStop === undefined || cleanValue(rawNextStop) === '' ? null : cleanValue(rawNextStop),
       occupancy: raw.occupancy ?? null,
       scheduledTime: raw.scheduled_time ?? raw.scheduledTime ?? null,
@@ -287,7 +289,7 @@
     const merged = { ...previous, ...incoming };
     const preserveWhenMissing = [
       'cgmId', 'routeId', 'routeRef', 'normalizedRef', 'inventory',
-      'shortInventory', 'speed', 'timestamp', 'car', 'destination',
+      'shortInventory', 'speed', 'timestamp', 'car', 'destination', 'directionId',
       'nextStopRef', 'occupancy', 'scheduledTime', 'delay', 'bearing',
       'color', 'modelName', 'hasSourceTimestamp'
     ];
@@ -326,6 +328,123 @@
       if (/^\d{3,5}$/.test(ref)) return `Спирка [${stopCodeKey(ref)}]`;
     }
     return vehicle.destination || 'Няма данни за следваща спирка';
+  }
+
+  function normaliseDirectionText(value) {
+    return String(value ?? '').trim().toLocaleLowerCase('bg-BG').replace(/[\s.,;:()\[\]{}'"–—-]+/g, ' ');
+  }
+
+  function directionStopMatches(ref, patternStop) {
+    const a = cleanValue(ref);
+    const b = cleanValue(patternStop);
+    if (!a || !b) return false;
+    if (stopCodeKey(a) === stopCodeKey(b)) return true;
+    const stopA = state.stopsByKey.get(a) || state.stopsByKey.get(stopCodeKey(a));
+    const stopB = state.stopsByKey.get(b) || state.stopsByKey.get(stopCodeKey(b));
+    if (stopA && stopB && String(stopA.id) === String(stopB.id)) return true;
+    if (stopA && (String(stopA.id) === b || stopCodeKey(stopA.code) === stopCodeKey(b))) return true;
+    if (stopB && (String(stopB.id) === a || stopCodeKey(stopB.code) === stopCodeKey(a))) return true;
+    return false;
+  }
+
+  function pointToShapeMetrics(coords, shape, bearing) {
+    const lat0 = Number(coords?.[0]);
+    const lon0 = Number(coords?.[1]);
+    if (!Number.isFinite(lat0) || !Number.isFinite(lon0) || !Array.isArray(shape) || shape.length < 2) {
+      return { distance: 1e9, bearingDelta: 180 };
+    }
+    const xScale = 111320 * Math.cos(lat0 * Math.PI / 180);
+    const yScale = 110540;
+    const projected = shape.map((point) => ({
+      x: (Number(point.lon) - lon0) * xScale,
+      y: (Number(point.lat) - lat0) * yScale
+    })).filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+    let minSq = Infinity;
+    let segmentBearing = null;
+    for (let i = 0; i < projected.length - 1; i++) {
+      const a = projected[i], b = projected[i + 1];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const lenSq = dx * dx + dy * dy;
+      const t = lenSq ? Math.max(0, Math.min(1, -(a.x * dx + a.y * dy) / lenSq)) : 0;
+      const qx = a.x + t * dx, qy = a.y + t * dy;
+      const sq = qx * qx + qy * qy;
+      if (sq < minSq) {
+        minSq = sq;
+        segmentBearing = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+      }
+    }
+    let bearingDelta = 0;
+    if (Number.isFinite(bearing) && bearing > 0 && segmentBearing !== null) {
+      const delta = Math.abs((bearing - segmentBearing + 360) % 360);
+      bearingDelta = Math.min(delta, 360 - delta);
+    }
+    return { distance: Math.sqrt(minSq), bearingDelta };
+  }
+
+  function getVehicleRouteDirection(vehicle) {
+    if (!state.data || !vehicle) return null;
+    const direct = vehicle.routeId ? state.routesById.get(String(vehicle.routeId)) : null;
+    const sameRef = vehicle.normalizedRef ? (state.routesByRef.get(vehicle.normalizedRef) || []) : [];
+    const candidates = [];
+    const seenRoutes = new Set();
+    const tryAddRoute = (route) => {
+      if (!route || seenRoutes.has(String(route.route_id))) return;
+      seenRoutes.add(String(route.route_id));
+      const directions = state.data.directions?.[route.route_id] || {};
+      Object.entries(directions).forEach(([key, direction]) => {
+        const shape = state.data.shapes?.[direction.shape_id];
+        if (!Array.isArray(shape) || shape.length < 2) return;
+        candidates.push({ route, key: String(key), direction, shape });
+      });
+    };
+    tryAddRoute(direct);
+    sameRef.filter((route) => routeType(route) === vehicle.type || routeType(route) === 'other').forEach(tryAddRoute);
+    if (!candidates.length) return null;
+
+    const dirToken = normaliseRef(vehicle.directionId);
+    const destinationText = normaliseDirectionText(vehicle.destination);
+    const nextRef = cleanValue(vehicle.nextStopRef);
+    let best = null;
+    let bestScore = Infinity;
+    for (const candidate of candidates) {
+      const { route, key, direction, shape } = candidate;
+      let score = 0;
+      if (vehicle.routeId && String(route.route_id) !== String(vehicle.routeId)) score += 80;
+
+      // Some live sources send direction keys such as D1/D2. Only trust exact
+      // key matches; plain numeric values are ambiguous between source schemas.
+      if (dirToken && normaliseRef(key) === dirToken) score -= 100000;
+
+      const heading = normaliseDirectionText(direction.destination || direction.headsign);
+      if (destinationText && heading) {
+        if (destinationText === heading) score -= 10000;
+        else if (destinationText.length > 3 && (heading.includes(destinationText) || destinationText.includes(heading))) score -= 4000;
+      }
+
+      const pattern = Array.isArray(direction.pattern) ? direction.pattern : [];
+      if (nextRef && pattern.length) {
+        if (directionStopMatches(nextRef, pattern[0]) || directionStopMatches(nextRef, pattern[pattern.length - 1])) score -= 1500;
+      }
+
+      const metrics = pointToShapeMetrics(vehicle.coords, shape, vehicle.bearing);
+      score += metrics.distance;
+      // Heading helps distinguish two directions sharing the same street/shape.
+      if (Number.isFinite(vehicle.bearing) && vehicle.bearing > 0) score += metrics.bearingDelta * 2.2;
+      if (score < bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+    return best;
+  }
+
+  function resolveVehicleDestination(vehicle) {
+    const selected = getVehicleRouteDirection(vehicle);
+    const destination = selected?.direction?.destination || selected?.direction?.headsign;
+    if (destination) return String(destination);
+    const directText = cleanValue(vehicle.destination);
+    if (directText && !/^\d{3,5}$/.test(directText)) return directText;
+    return 'Няма данни за дестинацията';
   }
 
   function transportIconPath(type, ref) {
@@ -526,20 +645,22 @@
   }
 
   function vehiclePopup(vehicle) {
-    const typeLabel = TYPE_NAMES[vehicle.type] || TYPE_NAMES.other;
     const line = vehicle.routeRef || 'Без линия';
-    const destination = resolveNextStop(vehicle);
+    const destination = resolveVehicleDestination(vehicle);
+    const nextStop = resolveNextStop(vehicle);
     const speed = vehicle.speed === null ? '—' : `${Math.max(0, Math.round(vehicle.speed))} km/h`;
     const delay = delayView(vehicle);
     const model = vehicle.modelName || 'Моделът не е разпознат';
     const inventory = displayInventoryNumber(vehicle.inventory || vehicle.shortInventory);
-    const car = vehicle.car !== null && vehicle.car !== undefined && String(vehicle.car).trim() !== '' ? ` · кола ${vehicle.car}` : '';
     return `<div class="vehicle-popup" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
       <div class="vehicle-popup-top">
         ${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}
-        <div class="vehicle-popup-heading"><strong>${escapeHTML(model)}</strong><small>${escapeHTML(typeLabel + car)}</small></div>
+        <div class="vehicle-popup-heading">
+          <span class="vehicle-popup-destination-line"><img src="./assets/icons/destinationarrow.svg" alt="" aria-hidden="true"><strong>${escapeHTML(destination)}</strong></span>
+        </div>
       </div>
-      <div class="vehicle-popup-destination"><span>Следваща спирка</span><strong>${escapeHTML(destination)}</strong></div>
+      <div class="vehicle-popup-destination"><span>Следваща спирка</span><strong>${escapeHTML(nextStop)}</strong></div>
+      <div class="vehicle-popup-model">${escapeHTML(model)}</div>
       <div class="vehicle-popup-grid">
         <div class="vehicle-popup-item"><span>Инвентарен номер</span><strong>${escapeHTML(inventory)}</strong></div>
         <div class="vehicle-popup-item"><span>Скорост</span><strong>${escapeHTML(speed)}</strong></div>
@@ -695,35 +816,27 @@
   function renderSelectedVehicleRoute(vehicle) {
     if (!state.selectedVehicleRouteLayer || !state.data || !vehicle) return;
     state.selectedVehicleRouteLayer.clearLayers();
-    const candidates = [];
-    const hasShape = (route) => Object.values(state.data.directions?.[route.route_id] || {}).some((direction) => {
-      const shape = state.data.shapes?.[direction.shape_id];
-      return Array.isArray(shape) && shape.length >= 2;
-    });
-    const directRoute = state.routesById.get(String(vehicle.routeId || ''));
-    if (directRoute && hasShape(directRoute)) candidates.push(directRoute);
-    else if (vehicle.normalizedRef) {
-      const sameRef = state.routesByRef.get(vehicle.normalizedRef) || [];
-      candidates.push(...sameRef.filter((route) => (routeType(route) === vehicle.type || routeType(route) === 'other') && hasShape(route)));
+    const selected = getVehicleRouteDirection(vehicle);
+    const shape = selected?.shape;
+    if (!Array.isArray(shape) || shape.length < 2) {
+      showToast('Не намерих геометрия за текущото направление на превозното средство.');
+      return;
     }
-    const uniq = new Map(candidates.map((route) => [String(route.route_id), route]));
-    const lines = [];
-    for (const route of uniq.values()) {
-      const directions = state.data.directions?.[route.route_id] || {};
-      for (const direction of Object.values(directions)) {
-        const shape = state.data.shapes?.[direction.shape_id];
-        if (!Array.isArray(shape) || shape.length < 2) continue;
-        const points = shape.map((point) => [Number(point.lat), Number(point.lon)]).filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon));
-        if (points.length < 2) continue;
-        const line = L.polyline(points, {
-          color: getVehicleColor(vehicle), weight: 4, opacity: 0.48,
-          lineCap: 'round', lineJoin: 'round', interactive: false,
-          className: 'selected-vehicle-route'
-        }).addTo(state.selectedVehicleRouteLayer);
-        lines.push(line);
-      }
-    }
-    // Do not zoom to the entire line: the selected marker and compact popup should remain visible.
+    const points = shape.map((point) => [Number(point.lat), Number(point.lon)])
+      .filter(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon));
+    if (points.length < 2) return;
+    L.polyline(points, {
+      color: getVehicleColor(vehicle),
+      weight: 5,
+      opacity: 1,
+      fillOpacity: 0,
+      lineCap: 'round',
+      lineJoin: 'round',
+      interactive: false,
+      className: 'selected-vehicle-route'
+    }).addTo(state.selectedVehicleRouteLayer);
+    // Keep map framing unchanged so the line does not pull the selected vehicle away
+    // from the user's current view. Only one direction is ever drawn for this vehicle.
   }
 
   function renderRoute(fit = false) {
