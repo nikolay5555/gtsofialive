@@ -518,7 +518,7 @@
 
   function getVehicleRouteDirection(vehicle) {
     if (!state.data || !vehicle) return null;
-    const direct = vehicle.routeId ? state.routesById.get(String(vehicle.routeId)) : null;
+    const direct = vehicle.gtfsRouteId ? state.routesById.get(String(vehicle.gtfsRouteId)) : null;
     const sameRef = vehicle.normalizedRef ? (state.routesByRef.get(vehicle.normalizedRef) || []) : [];
     const candidates = [];
     const seenRoutes = new Set();
