@@ -703,9 +703,9 @@
   }
 
   function installVehiclePopupStyles() {
-    if (document.getElementById('gtsofia-popup-v9')) return;
+    if (document.getElementById('gtsofia-popup-v10')) return;
     const style = document.createElement('style');
-    style.id = 'gtsofia-popup-v9';
+    style.id = 'gtsofia-popup-v10';
     style.textContent = `
       /* A compact side bubble leaves the selected GTFS polyline visible. */
       .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper {
@@ -733,7 +733,7 @@
         display: none !important;
       }
       .gts-vehicle-leaflet-popup .leaflet-popup-content {
-        width: min(258px, calc(100vw - 42px)) !important;
+        width: min(278px, calc(100vw - 42px)) !important;
         max-width: calc(100vw - 42px) !important;
         margin: 6px !important;
         box-sizing: border-box;
@@ -764,17 +764,25 @@
         min-width: 0;
         padding: 0;
         color: #0f172a;
-        overflow-wrap: anywhere;
+        overflow-wrap: break-word;
+        word-break: normal;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-top {
         grid-column: 1 / -1;
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
         align-items: center !important;
-        gap: 7px;
+        gap: 4px;
         min-width: 0;
         margin: 0;
-        padding: 0 20px 5px 0;
+        padding: 0 0 5px;
         border-bottom: 1px solid #e8edf3;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-line {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        padding-right: 20px;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity {
         display: inline-flex;
@@ -814,8 +822,10 @@
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-heading {
         display: flex;
+        grid-column: 1 / -1;
         flex: 1 1 auto;
         align-items: center;
+        width: 100%;
         min-width: 0;
         margin: 0;
         padding: 0;
@@ -863,6 +873,7 @@
         min-height: 43px;
         margin: 0;
         padding: 5px 7px;
+        box-sizing: border-box;
         border: 1px solid #e1e7ef;
         border-radius: 8px;
         background: #f7f9fc;
@@ -880,6 +891,10 @@
         letter-spacing: 0;
         text-transform: none;
       }
+      .gts-vehicle-leaflet-popup .vehicle-popup-destination {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
       .gts-vehicle-leaflet-popup .vehicle-popup-destination strong,
       .gts-vehicle-leaflet-popup .vehicle-popup-model strong {
         display: block;
@@ -887,8 +902,13 @@
         color: #111827;
         font-size: 12px;
         font-weight: 700;
-        line-height: 1.2;
-        overflow-wrap: anywhere;
+        line-height: 1.25;
+        overflow-wrap: break-word;
+        word-break: normal;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-destination-line strong {
+        overflow-wrap: break-word;
+        word-break: normal;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-grid {
         grid-column: 1 / -1;
@@ -949,7 +969,7 @@
 
       @media (max-width: 480px) {
         .gts-vehicle-leaflet-popup .leaflet-popup-content {
-          width: min(232px, calc(100vw - 42px)) !important;
+          width: min(248px, calc(100vw - 42px)) !important;
           max-width: calc(100vw - 42px) !important;
           margin: 6px !important;
         }
@@ -1153,7 +1173,7 @@
     const inventory = displayInventoryNumber(vehicle.inventory || vehicle.shortInventory);
     return `<div class="vehicle-popup" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
       <div class="vehicle-popup-top">
-        ${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}
+        <div class="vehicle-popup-line">${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}</div>
         <div class="vehicle-popup-heading">
           <span class="vehicle-popup-destination-line"><img src="./assets/icons/destinationarrow.svg" alt="" aria-hidden="true"><strong>${escapeHTML(destination)}</strong></span>
         </div>
@@ -1271,8 +1291,8 @@
         const availableHeight = Math.max(200, (window.innerHeight || 768) - 40);
         vehicle.marker.bindPopup(() => vehiclePopup(vehicle), {
           closeButton: true,
-          maxWidth: Math.min(isNarrowViewport ? 248 : 276, availableWidth),
-          minWidth: Math.min(isNarrowViewport ? 238 : 270, availableWidth),
+          maxWidth: Math.min(isNarrowViewport ? 270 : 300, availableWidth),
+          minWidth: Math.min(isNarrowViewport ? 260 : 290, availableWidth),
           maxHeight: availableHeight,
           autoPan: true,
           keepInView: true,
