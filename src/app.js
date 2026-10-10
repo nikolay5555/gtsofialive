@@ -116,15 +116,39 @@
     return palette[type] || palette.other;
   }
 
+  function catalogRouteForVehicle(raw) {
+    const cgmIds = [
+      raw?.cgm_route_id,
+      raw?.cgmRouteId,
+      raw?.route?.cgm_route_id,
+      raw?.route?.cgmRouteId
+    ];
+    for (const value of cgmIds) {
+      const id = cleanValue(value);
+      if (id && state.routesByCgmId.has(id)) return state.routesByCgmId.get(id);
+    }
+
+    // Some proxy snapshots use routeId/route_id for a CGM ID instead of
+    // exposing cgm_route_id. Only use the catalog fallback if it is not a
+    // route ID already found in the local GTFS routes table.
+    const possibleId = firstClean(raw?.gtfs_route_id, raw?.gtfsRouteId,
+      raw?.route_id, raw?.routeId, raw?.route?.route_id);
+    if (possibleId && !state.routesById.has(possibleId)) {
+      return state.routesByCgmId.get(possibleId) || null;
+    }
+    return null;
+  }
+
   function routeForVehicle(raw) {
-    const cgmRouteId = firstClean(raw?.cgm_route_id, raw?.cgmRouteId);
-    const catalogRoute = cgmRouteId ? state.routesByCgmId.get(cgmRouteId) : null;
-    const directId = firstClean(raw?.route_id, raw?.route?.route_id);
+    const directId = firstClean(raw?.gtfs_route_id, raw?.gtfsRouteId,
+      raw?.route_id, raw?.routeId, raw?.route?.route_id);
     const direct = directId ? state.routesById.get(directId) : null;
     if (direct) return direct;
 
-    // Resolve the public route number independently of compact route geometry.
-    const ref = firstClean(raw?.route_ref, raw?.routeRef, catalogRoute?.route_ref);
+    const catalogRoute = catalogRouteForVehicle(raw);
+    const ref = firstClean(raw?.route_ref, raw?.routeRef, raw?.route_short_name,
+      raw?.routeShortName, raw?.line, raw?.line_number, raw?.lineNumber,
+      raw?.route?.route_short_name, catalogRoute?.route_ref);
     if (!ref) return null;
     const options = state.routesByRef.get(normaliseRef(ref)) || [];
     const type = firstClean(raw?.type, catalogRoute?.type);
@@ -223,17 +247,18 @@
       .map(toCoordinates).find(Boolean) || null;
     if (!coords || Math.abs(coords[0]) > 90 || Math.abs(coords[1]) > 180) return null;
 
-    const routeId = firstClean(raw.cgm_route_id, raw.cgmRouteId, raw.route_id, raw.routeId, raw.route?.route_id);
-    const catalogRoute = state.routesByCgmId.get(firstClean(raw.cgm_route_id, raw.cgmRouteId)) || null;
+    const routeId = firstClean(raw.cgm_route_id, raw.cgmRouteId, raw.route_id, raw.routeId,
+      raw.gtfs_route_id, raw.gtfsRouteId, raw.route?.route_id);
+    const catalogRoute = catalogRouteForVehicle(raw);
     const route = routeForVehicle(raw);
     const rawId = firstClean(raw.cgm_id, raw.vehicle_id, raw.vehicleId, raw.id, raw.inv_number, raw.inventory_number, raw.full_inv_number);
     if (!rawId) return null;
-    const routeIdFields = ['cgm_route_id', 'cgmRouteId', 'route_id', 'routeId'];
+    const routeIdFields = ['cgm_route_id', 'cgmRouteId', 'route_id', 'routeId', 'gtfs_route_id', 'gtfsRouteId'];
     const routeRefFields = ['route_ref', 'routeRef', 'route_short_name', 'routeShortName', 'line', 'line_number', 'lineNumber'];
     const destinationStopFields = ['destination_stop', 'destinationStop', 'destination_stop_code', 'destinationStopCode'];
     const nextStopFields = ['next_stop', 'nextStop', 'next_stop_code', 'nextStopCode'];
     const destinationFields = ['trip_headsign', 'tripHeadsign', 'destination', 'headsign'];
-    const hasRouteIdField = hasOwnAny(raw, routeIdFields) || hasOwnAny(raw.route, ['route_id']);
+    const hasRouteIdField = hasOwnAny(raw, routeIdFields) || hasOwnAny(raw.route, ['route_id', 'gtfs_route_id']);
     const hasRouteRefField = hasOwnAny(raw, routeRefFields) || hasOwnAny(raw.route, ['route_short_name']);
     const hasDestinationStopField = hasOwnAny(raw, destinationStopFields);
     const hasNextStopField = hasOwnAny(raw, nextStopFields);
@@ -420,18 +445,23 @@
 
     // When a source omits a field entirely, keep the last known value. If it
     // explicitly sends an empty route/stop/destination, respect that update.
-    if (!incoming.hasRouteIdField && !incoming.routeId) merged.routeId = previous.routeId;
-    if (!incoming.hasRouteRefField && !incoming.routeRef) {
-      merged.routeRef = previous.routeRef;
-      merged.normalizedRef = previous.normalizedRef;
-    } else if (incoming.hasRouteRefField && !incoming.routeRef && !incoming.routeId) {
-      // An explicit blank route is a real feed update, not an omitted field.
-      merged.routeRef = '';
-      merged.normalizedRef = '';
-      if (!incoming.hasRouteIdField) merged.routeId = '';
+    if (!cleanValue(incoming.routeId)) merged.routeId = previous.routeId;
+    if (!cleanValue(incoming.gtfsRouteId)) merged.gtfsRouteId = previous.gtfsRouteId;
+
+    if (!cleanValue(incoming.routeRef)) {
+      // Live GTFS/proxy snapshots are sometimes partial. A blank ref does not
+      // invalidate a line that was resolved moments ago; retain the last known
+      // public number, GTFS route id and its color until a replacement resolves.
+      merged.routeRef = previous.routeRef || '';
+      merged.normalizedRef = previous.normalizedRef || '';
+      merged.gtfsRouteId = previous.gtfsRouteId || merged.gtfsRouteId || '';
+      if (previous.color) merged.color = previous.color;
     }
-    if (!incoming.hasNextStopField && !incoming.nextStopRef) merged.nextStopRef = previous.nextStopRef;
-    if (!incoming.hasDestinationField && !incoming.destination) merged.destination = previous.destination;
+
+    if (!cleanValue(incoming.nextStopRef)) merged.nextStopRef = previous.nextStopRef;
+    if (!cleanValue(incoming.destinationStopRef)) merged.destinationStopRef = previous.destinationStopRef;
+    if (!cleanValue(incoming.destination)) merged.destination = previous.destination;
+    if (!cleanValue(incoming.directionId)) merged.directionId = previous.directionId;
 
     // Partial feed messages can omit type/model. Do not erase resolved metadata
     // unless the vehicle's identity genuinely changed.
@@ -703,9 +733,9 @@
   }
 
   function installVehiclePopupStyles() {
-    if (document.getElementById('gtsofia-popup-v10')) return;
+    if (document.getElementById('gtsofia-popup-v11')) return;
     const style = document.createElement('style');
-    style.id = 'gtsofia-popup-v10';
+    style.id = 'gtsofia-popup-v11';
     style.textContent = `
       /* A compact side bubble leaves the selected GTFS polyline visible. */
       .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper {
@@ -769,20 +799,21 @@
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-top {
         grid-column: 1 / -1;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
+        display: flex;
+        flex-direction: row;
         align-items: center !important;
-        gap: 4px;
+        gap: 7px;
         min-width: 0;
         margin: 0;
-        padding: 0 0 5px;
+        padding: 0 20px 5px 0;
         border-bottom: 1px solid #e8edf3;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-line {
         display: flex;
         align-items: center;
+        flex: 0 0 auto;
         min-width: 0;
-        padding-right: 20px;
+        padding-right: 0;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity {
         display: inline-flex;
@@ -822,10 +853,9 @@
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-heading {
         display: flex;
-        grid-column: 1 / -1;
         flex: 1 1 auto;
         align-items: center;
-        width: 100%;
+        width: auto;
         min-width: 0;
         margin: 0;
         padding: 0;
