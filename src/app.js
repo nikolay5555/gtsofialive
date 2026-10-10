@@ -22,6 +22,7 @@
     routesById: new Map(),
     routesByRef: new Map(),
     stops: [],
+    stopsByKey: new Map(),
     vehicles: new Map(),
     socket: null,
     socketGeneration: 0,
@@ -40,7 +41,7 @@
 
   const $ = (id) => document.getElementById(id);
   const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-  const hasFinite = (value) => Number.isFinite(Number(value));
+  const hasFinite = (value) => value !== null && value !== undefined && String(value).trim() !== '' && Number.isFinite(Number(value));
 
   function normaliseRef(value) {
     return String(value ?? '').trim().replace(/\s+/g, '').toUpperCase();
@@ -79,15 +80,20 @@
   }
 
   function routeColor(route, ref, type) {
-    const override = (state.data?.lineOverrides || []).find((item) =>
-      String(item.cgm_id ?? '') === String(route?.route_id ?? '')
-    );
-    if (override?.color) return override.color.startsWith('#') ? override.color : `#${override.color}`;
-    const source = String(route?.route_color || '').trim();
-    if (/^[0-9a-f]{6}$/i.test(source)) return `#${source}`;
-    if (/^#[0-9a-f]{6}$/i.test(source)) return source;
-    if (String(ref || '').startsWith('N')) return '#374151';
-    return TYPE_COLORS[type] || TYPE_COLORS.other;
+    const routeId = String(route?.route_id ?? '');
+    const override = (state.data?.lineOverrides || []).find((item) => String(item.cgm_id ?? '') === routeId);
+    if (override?.color) return String(override.color).startsWith('#') ? String(override.color) : `#${override.color}`;
+    if (String(ref || '').toUpperCase().startsWith('N')) return '#374151';
+    // Match the line-color rules used by GTSofia: when an override masks the
+    // source mode (for example, a temporary bus replacing a trolley), use the
+    // displayed mode's color instead of the original GTFS color.
+    if (!override?.type && route?.route_color) {
+      const source = String(route.route_color).trim();
+      if (/^[0-9a-f]{6}$/i.test(source)) return `#${source}`;
+      if (/^#[0-9a-f]{6}$/i.test(source)) return source;
+    }
+    const palette = { bus: '#BE1E2D', tram: '#F7941D', trolley: '#27AAE1', metro: '#1C75BC', other: '#111827' };
+    return palette[type] || palette.other;
   }
 
   function routeForVehicle(raw) {
@@ -116,17 +122,48 @@
     return null;
   }
 
-  function normaliseType(rawType, ref, route) {
-    const candidate = String(rawType ?? '').toLowerCase();
-    if (['bus', 'tram', 'trolley', 'metro'].includes(candidate)) {
-      if (candidate === 'trolley' && /[TТ]/i.test(String(ref || ''))) return 'bus';
-      return candidate;
+  function normaliseType(rawType, ref, route, raw = {}) {
+    const candidate = String(rawType ?? '').trim().toLowerCase();
+    const routeId = String(raw.cgm_route_id ?? raw.route_id ?? raw.routeId ?? '');
+    const override = (state.data?.lineOverrides || []).find((item) => String(item.cgm_id ?? '') === routeId);
+    const refUpper = String(ref || '').trim().toUpperCase();
+    const inventoryValue = raw.inv_number ?? raw.inventory_number ?? raw.full_inv_number ?? '';
+    const inventoryNumber = Number.parseInt(String(inventoryValue).split('/')[0], 10);
+
+    let type = 'other';
+    if (override?.type) {
+      type = String(override.type).toLowerCase();
+      if (type === 'trolleybus') type = 'trolley';
+    } else if (['bus', 'tram', 'trolley', 'trolleybus', 'metro'].includes(candidate)) {
+      type = candidate === 'trolleybus' ? 'trolley' : candidate;
+    } else if (candidate === '0' || candidate === '3' || candidate === '11' || candidate === '1') {
+      type = ({ '0': 'tram', '1': 'metro', '3': 'bus', '11': 'trolley' })[candidate];
+    } else if (candidate.includes('tram') || candidate.includes('трам')) {
+      type = 'tram';
+    } else if (candidate.includes('trolley') || candidate.includes('трол')) {
+      type = 'trolley';
+    } else if (candidate.includes('bus') || candidate.includes('автоб')) {
+      type = 'bus';
+    } else {
+      type = routeType(route);
     }
-    if (/[TТ]/i.test(String(ref || ''))) return 'bus';
-    if (candidate.includes('tram') || candidate.includes('трам')) return 'tram';
-    if (candidate.includes('trolley') || candidate.includes('трол')) return 'trolley';
-    if (candidate.includes('bus') || candidate.includes('автоб')) return 'bus';
-    return routeType(route);
+
+    // If the route lookup was not possible, the CGM route ID still reveals the
+    // original family (A = bus, TM = tram, TB = trolley). Overrides above win.
+    if (type === 'other') {
+      if (/^TM/i.test(routeId)) type = 'tram';
+      else if (/^TB/i.test(routeId)) type = 'trolley';
+      else if (/^A/i.test(routeId)) type = 'bus';
+      else if (/^[NTУY]/i.test(refUpper) || /[TТ]М?$/.test(refUpper)) type = 'bus';
+    }
+
+    // Some lines are historically reported as trolleybuses, but are operated
+    // as replacement buses in the live feed. Mirror the reference app's rule.
+    const fakeTrolleyRoutes = new Set(['60', '73', '74', '123', '288', '801']);
+    if (type === 'trolley' && (fakeTrolleyRoutes.has(refUpper) || (Number.isFinite(inventoryNumber) && inventoryNumber >= 5000 && inventoryNumber < 6000))) {
+      type = 'bus';
+    }
+    return ['bus', 'tram', 'trolley', 'metro'].includes(type) ? type : 'other';
   }
 
   function timestampSeconds(value) {
@@ -139,41 +176,130 @@
     if (!raw || typeof raw !== 'object') return null;
     const coords = toCoordinates(raw.coords ?? raw.coordinates ?? raw.position ?? raw.location);
     if (!coords || Math.abs(coords[0]) > 90 || Math.abs(coords[1]) > 180) return null;
+
     const route = routeForVehicle(raw);
-    let ref = String(raw.route_ref ?? raw.routeRef ?? routeRef(route) ?? '').trim();
+    const routeId = String(raw.cgm_route_id ?? raw.route_id ?? raw.routeId ?? '');
+    const override = (state.data?.lineOverrides || []).find((item) => String(item.cgm_id ?? '') === routeId);
+    let ref = String(raw.route_ref ?? raw.routeRef ?? raw.line ?? routeRef(route) ?? '').trim();
     if (/^(null|undefined)$/i.test(ref)) ref = '';
-    const type = normaliseType(raw.type ?? raw.vehicle_type, ref, route);
-    const override = (state.data?.lineOverrides || []).find((item) => String(item.cgm_id ?? '') === String(raw.cgm_route_id ?? raw.route_id ?? ''));
-    if (override?.route_ref && !raw.route_ref && !raw.routeRef) ref = String(override.route_ref);
+    if (override?.route_ref && !raw.route_ref && !raw.routeRef && !raw.line) ref = String(override.route_ref);
+
+    const type = normaliseType(raw.type ?? raw.vehicle_type, ref, route, raw);
     const rawId = raw.cgm_id ?? raw.vehicle_id ?? raw.id ?? raw.inv_number ?? raw.inventory_number;
     if (rawId === undefined || rawId === null || String(rawId).trim() === '') return null;
+
     const speed = hasFinite(raw.speed) ? Number(raw.speed) : (hasFinite(raw.speed_kmh) ? Number(raw.speed_kmh) : null);
-    const timestamp = timestampSeconds(raw.timestamp ?? raw.updated_at ?? raw.updatedAt ?? raw.time);
+    const timestampRaw = raw.timestamp ?? raw.updated_at ?? raw.updatedAt ?? raw.time;
+    const timestamp = hasFinite(timestampRaw) ? timestampSeconds(timestampRaw) : null;
     const normalizedRef = normaliseRef(ref);
     const color = routeColor(route, normalizedRef, type);
+    const inventoryRaw = raw.full_inv_number ?? raw.inv_number ?? raw.inventory_number;
+    const inventory = inventoryRaw === null || inventoryRaw === undefined || String(inventoryRaw).trim() === '' ? null : String(inventoryRaw);
+    const shortInventoryRaw = raw.inv_number ?? raw.inventory_number ?? raw.full_inv_number;
+    const shortInventory = shortInventoryRaw === null || shortInventoryRaw === undefined || String(shortInventoryRaw).trim() === '' ? null : String(shortInventoryRaw);
+    const rawNextStop = raw.next_stop ?? raw.nextStop ?? raw.destination_stop ?? raw.destination_stop_code ?? raw.stop_code ?? null;
+    const destinationText = raw.trip_headsign ?? raw.destination ?? raw.headsign ?? '';
+    let modelName = null;
+    const modelApi = window.GTSOFIA_VEHICLE_MODELS;
+    if (modelApi && shortInventory && ['bus', 'tram', 'trolley'].includes(type)) {
+      try {
+        modelName = modelApi.get_vehicle_model_name({ type, inv_number: shortInventory, cgm_id: String(raw.cgm_id ?? rawId) }) || null;
+      } catch (error) {
+        console.warn('Не успяхме да определим модела на превозното средство:', error);
+      }
+    }
+
     return {
       id: String(rawId),
       cgmId: String(raw.cgm_id ?? rawId),
-      routeId: String(raw.cgm_route_id ?? raw.route_id ?? ''),
+      routeId,
       routeRef: ref,
       normalizedRef,
       type,
-      inventory: String(raw.full_inv_number ?? raw.inv_number ?? raw.inventory_number ?? rawId),
-      shortInventory: String(raw.inv_number ?? raw.inventory_number ?? rawId),
+      inventory,
+      shortInventory,
       coords,
       speed,
       timestamp,
       car: raw.car ?? null,
-      destination: raw.destination_stop ?? raw.trip_headsign ?? raw.destination ?? '',
+      destination: String(destinationText ?? '').trim(),
+      nextStopRef: rawNextStop === null || rawNextStop === undefined || String(rawNextStop).trim() === '' ? null : String(rawNextStop).trim(),
       occupancy: raw.occupancy ?? null,
       scheduledTime: raw.scheduled_time ?? null,
       delay: hasFinite(raw.delay) ? Number(raw.delay) : null,
-      bearing: hasFinite(raw.bearing) ? Number(raw.bearing) : 0,
+      bearing: hasFinite(raw.bearing) ? Number(raw.bearing) : null,
       color,
+      modelName,
       lastSeenAt: Date.now(),
       marker: null,
       raw
     };
+  }
+
+  function mergeVehicleSnapshot(previous, incoming, now) {
+    if (!previous) {
+      incoming.timestamp = incoming.timestamp ?? now / 1000;
+      incoming.bearing = incoming.bearing ?? 0;
+      incoming.inventory = incoming.inventory ?? incoming.id;
+      incoming.shortInventory = incoming.shortInventory ?? incoming.inventory;
+      return incoming;
+    }
+
+    const [oldLat, oldLon] = previous.coords;
+    const [newLat, newLon] = incoming.coords;
+    const merged = { ...previous, ...incoming };
+    const preserveWhenMissing = [
+      'cgmId', 'routeId', 'routeRef', 'normalizedRef', 'inventory',
+      'shortInventory', 'speed', 'timestamp', 'car', 'destination',
+      'nextStopRef', 'occupancy', 'scheduledTime', 'delay', 'bearing',
+      'color', 'modelName'
+    ];
+    for (const key of preserveWhenMissing) {
+      const value = incoming[key];
+      if (value === null || value === undefined || value === '') merged[key] = previous[key];
+    }
+    // Partial feed messages sometimes omit route type/model data or only carry
+    // a vehicle ID. Never let those placeholders erase previously resolved info.
+    if (incoming.type === 'other' && previous.type && previous.type !== 'other') merged.type = previous.type;
+    if (incoming.modelName === 'Неизвестен модел' || incoming.modelName === null) merged.modelName = previous.modelName;
+    if (incoming.inventory === null) merged.inventory = previous.inventory;
+    if (incoming.shortInventory === null) merged.shortInventory = previous.shortInventory;
+    if ((incoming.type === 'other' || !incoming.routeId) && previous.color) merged.color = previous.color;
+    if (merged.inventory === null || merged.inventory === undefined || merged.inventory === '') merged.inventory = incoming.id;
+    if (merged.shortInventory === null || merged.shortInventory === undefined || merged.shortInventory === '') merged.shortInventory = merged.inventory;
+    if (!merged.bearing && (oldLat !== newLat || oldLon !== newLon)) {
+      merged.bearing = calculateBearing(previous.coords, incoming.coords);
+    }
+    merged.marker = previous.marker;
+    merged.lastSeenAt = now;
+    return merged;
+  }
+
+  function stopCodeKey(value) {
+    const text = String(value ?? '').trim();
+    return /^\d+$/.test(text) ? text.padStart(4, '0') : text.toUpperCase();
+  }
+
+  function resolveNextStop(vehicle) {
+    const ref = String(vehicle.nextStopRef ?? '').trim();
+    if (ref) {
+      const stop = state.stopsByKey.get(ref) || state.stopsByKey.get(stopCodeKey(ref));
+      if (stop) return `${stop.name} [${String(stop.code).padStart(4, '0')}]`;
+      if (/^\d{3,5}$/.test(ref)) return `Спирка [${stopCodeKey(ref)}]`;
+    }
+    return vehicle.destination || 'Няма данни за следваща спирка';
+  }
+
+  function transportIconPath(type, ref) {
+    if (type === 'bus' && String(ref || '').toUpperCase().startsWith('N')) return 'assets/icons/night-bus.svg';
+    const icons = { bus: 'bus.svg', tram: 'tram.svg', trolley: 'trolley.svg', metro: 'metro.svg', other: 'bus.svg' };
+    return `assets/icons/${icons[type] || icons.other}`;
+  }
+
+  function lineIdentityMarkup(ref, type, color, compact = false) {
+    const line = ref || '—';
+    const metroClass = type === 'metro' ? ' metro' : '';
+    return `<span class="line-identity${compact ? ' compact' : ''}"><span class="line-identity-icon"><img src="${transportIconPath(type, ref)}" alt="" aria-hidden="true"></span><span class="line-identity-pill${metroClass}" style="--line-color:${escapeHTML(color || TYPE_COLORS[type] || TYPE_COLORS.other)}">${escapeHTML(line)}</span></span>`;
   }
 
   function calcDelay(vehicle) {
@@ -270,7 +396,12 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       state.data = data;
-      state.routes = (data.routes || []).filter((route) => ['0', '3', '11'].includes(String(route.route_type)));
+      const routesWithLiveGeometry = (data.routes || []).filter((route) => {
+        if (!['0', '3', '11'].includes(String(route.route_type))) return false;
+        const directions = Object.values(data.directions?.[route.route_id] || {});
+        return directions.some((direction) => Array.isArray(data.shapes?.[direction.shape_id]) && data.shapes[direction.shape_id].length >= 2);
+      });
+      state.routes = routesWithLiveGeometry;
       state.routesById = new Map(state.routes.map((route) => [String(route.route_id), route]));
       state.routesByRef = new Map();
       state.routes.forEach((route) => {
@@ -285,6 +416,12 @@
         name: String(stop.stop_name ?? 'Спирка'),
         lat: Number(stop.stop_lat), lon: Number(stop.stop_lon)
       })).filter((stop) => Number.isFinite(stop.lat) && Number.isFinite(stop.lon) && stop.lat !== 0 && stop.lon !== 0);
+      state.stopsByKey = new Map();
+      state.stops.forEach((stop) => {
+        for (const key of [stop.id, stop.code, stopCodeKey(stop.id), stopCodeKey(stop.code)]) {
+          if (key && !state.stopsByKey.has(String(key))) state.stopsByKey.set(String(key), stop);
+        }
+      });
       populateLineFilter();
       $('static-data-date').textContent = data.updatedAt ? `CGM GTFS · ${data.updatedAt}` : 'CGM Sofia · GTFS';
       renderRoute();
@@ -302,10 +439,9 @@
     select.replaceChildren(new Option('Всички линии', 'all'));
     const unique = [...state.routesByRef.entries()].sort(([a], [b]) => a.localeCompare(b, 'bg', { numeric: true }));
     unique.forEach(([ref, routes]) => {
-      const route = routes[0];
-      const type = routeType(route);
-      const label = `${ref} · ${TYPE_NAMES[type] || TYPE_NAMES.other}`;
-      select.add(new Option(label, ref));
+      const types = [...new Set(routes.map((route) => routeType(route)))];
+      const typeLabel = types.map((type) => TYPE_NAMES[type] || TYPE_NAMES.other).join(' / ');
+      select.add(new Option(`${ref} · ${typeLabel}`, ref));
     });
   }
 
@@ -331,12 +467,17 @@
   function vehiclePopup(vehicle) {
     const typeLabel = TYPE_NAMES[vehicle.type] || TYPE_NAMES.other;
     const line = vehicle.routeRef || 'Без линия';
-    const destination = vehicle.destination || 'Няма данни за направление';
+    const destination = resolveNextStop(vehicle);
     const speed = vehicle.speed === null ? '—' : `${Math.max(0, Math.round(vehicle.speed))} km/h`;
     const delay = delayView(vehicle);
+    const model = vehicle.modelName && vehicle.modelName !== 'Неизвестен модел' ? vehicle.modelName : 'Моделът не е разпознат';
+    const car = vehicle.car !== null && vehicle.car !== undefined && String(vehicle.car).trim() !== '' ? ` · кола ${vehicle.car}` : '';
     return `<div class="vehicle-popup" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
-      <div class="vehicle-popup-top"><span class="vehicle-popup-badge">${escapeHTML(line)}</span><div><strong>МПС ${escapeHTML(vehicle.inventory)}</strong><small>${escapeHTML(typeLabel)}${vehicle.car ? ` · кола ${escapeHTML(vehicle.car)}` : ''}</small></div></div>
-      <div style="font-size:11px;color:#4b5563;margin:0 0 10px">${escapeHTML(destination)}</div>
+      <div class="vehicle-popup-top">
+        ${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}
+        <div class="vehicle-popup-heading"><strong>${escapeHTML(vehicle.inventory)}</strong><small>${escapeHTML(model)}</small><small>${escapeHTML(typeLabel + car)}</small></div>
+      </div>
+      <div class="vehicle-popup-destination"><span>Следваща спирка</span><strong>${escapeHTML(destination)}</strong></div>
       <div class="vehicle-popup-grid">
         <div class="vehicle-popup-item"><span>Скорост</span><strong>${escapeHTML(speed)}</strong></div>
         <div class="vehicle-popup-item"><span>Закъснение</span><strong>${escapeHTML(delay.label)}</strong></div>
@@ -351,7 +492,7 @@
     if (state.selectedRoute !== 'all' && vehicle.normalizedRef !== state.selectedRoute) return false;
     const query = state.query.trim().toLocaleLowerCase('bg-BG');
     if (query) {
-      const haystack = [vehicle.routeRef, vehicle.inventory, vehicle.shortInventory, vehicle.destination, TYPE_NAMES[vehicle.type]].join(' ').toLocaleLowerCase('bg-BG');
+      const haystack = [vehicle.routeRef, vehicle.inventory, vehicle.shortInventory, vehicle.destination, resolveNextStop(vehicle), TYPE_NAMES[vehicle.type], vehicle.modelName].join(' ').toLocaleLowerCase('bg-BG');
       if (!haystack.includes(query)) return false;
     }
     return true;
@@ -404,12 +545,12 @@
       row.type = 'button';
       row.className = 'vehicle-row';
       row.dataset.vehicleId = vehicle.id;
-      const subtitle = vehicle.destination || TYPE_NAMES[vehicle.type] || TYPE_NAMES.other;
+      const subtitle = resolveNextStop(vehicle) !== 'Няма данни за следваща спирка' ? resolveNextStop(vehicle) : (TYPE_NAMES[vehicle.type] || TYPE_NAMES.other);
       const meta = isDelayView
         ? `<span class="delay-pill ${delay.className}">${escapeHTML(delay.label)}</span><span class="vehicle-updated">${escapeHTML(timeAgo(vehicle.timestamp))}</span>`
         : `<span class="vehicle-speed">${vehicle.speed === null ? '—' : `${Math.max(0, Math.round(vehicle.speed))} km/h`}</span><span class="vehicle-updated">${escapeHTML(timeAgo(vehicle.timestamp))}</span>`;
-      row.innerHTML = `<span class="line-badge" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">${escapeHTML(vehicle.routeRef || '—')}</span>
-        <span class="vehicle-row-main"><span class="vehicle-row-title">МПС ${escapeHTML(vehicle.inventory)}</span><span class="vehicle-row-subtitle">${escapeHTML(subtitle)}</span></span>
+      row.innerHTML = `${lineIdentityMarkup(vehicle.routeRef, vehicle.type, getVehicleColor(vehicle), true)}
+        <span class="vehicle-row-main"><span class="vehicle-row-title">${escapeHTML(vehicle.inventory)}</span><span class="vehicle-row-subtitle">${escapeHTML(subtitle)}</span></span>
         <span class="vehicle-row-meta">${meta}</span>`;
       row.addEventListener('click', () => focusVehicle(vehicle.id));
       fragment.appendChild(row);
@@ -427,7 +568,7 @@
         return;
       }
       if (!vehicle.marker) {
-        vehicle.marker = L.marker(vehicle.coords, { icon: vehicleIcon(vehicle), riseOnHover: true, keyboard: true, title: `Линия ${vehicle.routeRef || '—'} · МПС ${vehicle.inventory}` });
+        vehicle.marker = L.marker(vehicle.coords, { icon: vehicleIcon(vehicle), riseOnHover: true, keyboard: true, title: `Линия ${vehicle.routeRef || '—'} · инв. № ${vehicle.inventory}` });
         vehicle.marker.bindPopup(() => vehiclePopup(vehicle), { closeButton: true, maxWidth: 300, minWidth: 230 });
         vehicle.marker.on('click', () => { state.selectedVehicleId = id; });
       } else {
@@ -518,19 +659,10 @@
 
     const now = Date.now();
     for (const raw of vehicles) {
-      const vehicle = normaliseVehicle(raw);
-      if (!vehicle) continue;
-      const previous = state.vehicles.get(vehicle.id);
-      if (previous) {
-        const [oldLat, oldLon] = previous.coords;
-        const [newLat, newLon] = vehicle.coords;
-        if (vehicle.speed === null && (oldLat !== newLat || oldLon !== newLon)) vehicle.bearing = calculateBearing(previous.coords, vehicle.coords);
-        if (!vehicle.routeRef) vehicle.routeRef = previous.routeRef;
-        if (!vehicle.normalizedRef) vehicle.normalizedRef = previous.normalizedRef;
-        if (!vehicle.destination) vehicle.destination = previous.destination;
-        vehicle.marker = previous.marker;
-      }
-      vehicle.lastSeenAt = now;
+      const incoming = normaliseVehicle(raw);
+      if (!incoming) continue;
+      const previous = state.vehicles.get(incoming.id);
+      const vehicle = mergeVehicleSnapshot(previous, incoming, now);
       state.vehicles.set(vehicle.id, vehicle);
     }
     state.lastSnapshotAt = now;

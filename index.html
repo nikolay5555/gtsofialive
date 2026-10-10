@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="src/styles.css">
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script defer src="src/config.js"></script>
+  <script defer src="src/models.js"></script>
   <script defer src="src/app.js"></script>
 </head>
 <body>
@@ -41,9 +42,9 @@
       </section>
 
       <section class="stats-grid" aria-label="Брой активни превозни средства">
-        <div class="stat-card"><span class="stat-symbol bus-symbol">А</span><span class="stat-value" id="stat-bus">—</span><span class="stat-label">Автобуси</span></div>
-        <div class="stat-card"><span class="stat-symbol tram-symbol">ТМ</span><span class="stat-value" id="stat-tram">—</span><span class="stat-label">Трамваи</span></div>
-        <div class="stat-card"><span class="stat-symbol trolley-symbol">ТБ</span><span class="stat-value" id="stat-trolley">—</span><span class="stat-label">Тролеи</span></div>
+        <div class="stat-card"><span class="stat-symbol stat-icon"><img src="assets/icons/bus.svg" alt="" aria-hidden="true"></span><span class="stat-value" id="stat-bus">—</span><span class="stat-label">Автобуси</span></div>
+        <div class="stat-card"><span class="stat-symbol stat-icon"><img src="assets/icons/tram.svg" alt="" aria-hidden="true"></span><span class="stat-value" id="stat-tram">—</span><span class="stat-label">Трамваи</span></div>
+        <div class="stat-card"><span class="stat-symbol stat-icon"><img src="assets/icons/trolley.svg" alt="" aria-hidden="true"></span><span class="stat-value" id="stat-trolley">—</span><span class="stat-label">Тролеи</span></div>
       </section>
 
       <section class="filter-section">
@@ -97,10 +98,10 @@
       <div id="map" role="application" aria-label="Интерактивна карта на градския транспорт"></div>
       <div class="map-toolbar map-toolbar-top">
         <div class="map-context-pill"><span class="map-pin">⌖</span><span><strong>София</strong><small id="last-updated">Изчакване на първи ъпдейт</small></span></div>
-        <button id="locate-button" class="map-action-button" type="button"><span aria-hidden="true">◎</span> Моето местоположение</button>
+        <button id="locate-button" class="map-action-button" type="button"><img class="action-icon-image" src="assets/icons/location.svg" alt="" aria-hidden="true"> Моето местоположение</button>
       </div>
       <div class="map-toolbar map-toolbar-bottom">
-        <div class="map-legend"><span class="legend-item"><span class="legend-dot bus-legend"></span> Автобус</span><span class="legend-item"><span class="legend-dot tram-legend"></span> Трамвай</span><span class="legend-item"><span class="legend-dot trolley-legend"></span> Тролей</span></div>
+        <div class="map-legend"><span class="legend-item"><img src="assets/icons/bus.svg" alt="" aria-hidden="true"> Автобус</span><span class="legend-item"><img src="assets/icons/tram.svg" alt="" aria-hidden="true"> Трамвай</span><span class="legend-item"><img src="assets/icons/trolley.svg" alt="" aria-hidden="true"> Тролей</span></div>
         <button id="reset-map-button" class="map-reset-button" type="button" title="Центрирай картата към София">Център на картата <span aria-hidden="true">↗</span></button>
       </div>
       <div class="map-toast" id="map-toast" role="status" aria-live="polite" hidden></div>

@@ -260,3 +260,42 @@ body.dark-theme {
   .legend-item { font-size: 8px; }
   .legend-dot { width: 6px; height: 6px; }
 }
+
+
+/* GTSofia line identity: the same type icon + route pill pattern as the main site. */
+.stat-symbol.stat-icon { width: 36px; min-width: 36px; height: 36px; padding: 0; margin-bottom: 7px; background: transparent; border-radius: 0; }
+.stat-symbol.stat-icon img { display: block; width: 34px; height: 34px; object-fit: contain; }
+.legend-item { display: inline-flex; align-items: center; gap: 5px; color: var(--text-mid); font-size: 10px; font-weight: 700; white-space: nowrap; }
+.legend-item img { display: block; width: 20px; height: 20px; object-fit: contain; }
+.line-identity { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
+.line-identity-icon { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex: 0 0 30px; }
+.line-identity-icon img { display: block; width: 30px; height: 30px; object-fit: contain; }
+.line-identity-pill { display: inline-flex; align-items: center; justify-content: center; width: 60px; min-width: 42px; height: 30px; padding: 0 5px; border-radius: 6px; background: var(--line-color, #BE1E2D); color: #fff; font-size: 15px; font-weight: 800; line-height: 1; white-space: nowrap; }
+.line-identity-pill.metro { width: 30px; min-width: 30px; border-radius: 50%; }
+.line-identity.compact { gap: 4px; }
+.line-identity.compact .line-identity-icon, .line-identity.compact .line-identity-icon img { width: 26px; height: 26px; }
+.line-identity.compact .line-identity-icon { flex-basis: 26px; }
+.line-identity.compact .line-identity-pill { width: auto; min-width: 34px; height: 28px; padding: 0 6px; font-size: 12px; }
+.line-identity.compact .line-identity-pill.metro { width: 28px; min-width: 28px; border-radius: 50%; }
+.vehicle-popup { min-width: 215px; padding: 2px 1px; }
+.vehicle-popup-top { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
+.vehicle-popup-heading { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.vehicle-popup-heading strong { display: block; font-size: 15px; line-height: 1.15; color: #111827; }
+.vehicle-popup-heading small { display: block; font-size: 10px; line-height: 1.3; color: #6b7280; }
+.vehicle-popup-destination { display: flex; flex-direction: column; gap: 3px; margin: 0 0 10px; padding: 9px 10px; border-radius: 9px; background: #f9fafb; }
+.vehicle-popup-destination span { color: #6b7280; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .045em; }
+.vehicle-popup-destination strong { color: #111827; font-size: 11px; font-weight: 700; line-height: 1.35; }
+.vehicle-popup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.vehicle-popup-item { background: #f9fafb; border-radius: 8px; padding: 8px; }
+.vehicle-popup-item span { display: block; font-size: 9px; color: #6b7280; margin-bottom: 3px; }
+.vehicle-popup-item strong { font-size: 11px; color: #111827; }
+.vehicle-row .line-identity { margin-right: 1px; }
+.dark-theme .vehicle-popup-heading strong, .dark-theme .vehicle-popup-destination strong, .dark-theme .vehicle-popup-item strong { color: #111827; }
+@media (max-width: 390px) {
+  .line-identity.compact { gap: 2px; }
+  .line-identity.compact .line-identity-icon, .line-identity.compact .line-identity-icon img { width: 23px; height: 23px; }
+  .line-identity.compact .line-identity-icon { flex-basis: 23px; }
+  .line-identity.compact .line-identity-pill { height: 25px; min-width: 31px; font-size: 11px; }
+}
+
+.action-icon-image { display: block; width: 17px; height: 17px; object-fit: contain; flex: 0 0 auto; }
