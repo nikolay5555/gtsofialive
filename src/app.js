@@ -256,11 +256,13 @@
     if (!rawId) return null;
     const routeIdFields = ['cgm_route_id', 'cgmRouteId', 'route_id', 'routeId', 'gtfs_route_id', 'gtfsRouteId'];
     const routeRefFields = ['route_ref', 'routeRef', 'route_short_name', 'routeShortName', 'line', 'line_number', 'lineNumber'];
+    const vehicleTypeFields = ['type', 'vehicle_type', 'vehicleType', 'transport_type', 'transportType', 'category', 'route_type', 'routeType'];
     const destinationStopFields = ['destination_stop', 'destinationStop', 'destination_stop_code', 'destinationStopCode'];
     const nextStopFields = ['next_stop', 'nextStop', 'next_stop_code', 'nextStopCode'];
     const destinationFields = ['trip_headsign', 'tripHeadsign', 'destination', 'headsign'];
     const hasRouteIdField = hasOwnAny(raw, routeIdFields) || hasOwnAny(raw.route, ['route_id', 'gtfs_route_id']);
     const hasRouteRefField = hasOwnAny(raw, routeRefFields) || hasOwnAny(raw.route, ['route_short_name']);
+    const hasTypeField = hasOwnAny(raw, vehicleTypeFields) || hasOwnAny(raw.route, ['route_type']);
     const hasDestinationStopField = hasOwnAny(raw, destinationStopFields);
     const hasNextStopField = hasOwnAny(raw, nextStopFields);
     const directionIdFields = ['direction_id', 'directionId', 'direction_key', 'directionKey', 'route_direction_id', 'routeDirectionId'];
@@ -338,6 +340,7 @@
       modelName,
       hasRouteIdField,
       hasRouteRefField,
+      hasTypeField,
       hasDestinationStopField,
       hasNextStopField,
       hasDestinationField,
@@ -446,15 +449,16 @@
       if (value === null || value === undefined || value === '') merged[key] = previous[key];
     }
 
-    // When a source omits a field entirely, keep the last known value. If it
-    // explicitly sends an empty route/stop/destination, respect that update.
-    if (!cleanValue(incoming.routeId)) merged.routeId = previous.routeId;
-    if (!cleanValue(incoming.gtfsRouteId)) merged.gtfsRouteId = previous.gtfsRouteId;
+    // Preserve route metadata only when its fields are omitted. An explicit empty
+    // route update must not silently keep showing the previous line.
+    if (!incoming.hasRouteIdField) {
+      merged.routeId = previous.routeId;
+      merged.gtfsRouteId = previous.gtfsRouteId;
+    }
 
-    if (!cleanValue(incoming.routeRef)) {
-      // Live GTFS/proxy snapshots are sometimes partial. A blank ref does not
-      // invalidate a line that was resolved moments ago; retain the last known
-      // public number, GTFS route id and its color until a replacement resolves.
+    if (!cleanValue(incoming.routeRef) && !incoming.hasRouteRefField && !incoming.hasRouteIdField) {
+      // Partial snapshots sometimes omit both the line and route ID; retain the
+      // last known line in that case, but never override an explicit route update.
       merged.routeRef = previous.routeRef || '';
       merged.normalizedRef = previous.normalizedRef || '';
       merged.gtfsRouteId = previous.gtfsRouteId || merged.gtfsRouteId || '';
@@ -469,7 +473,13 @@
 
     // Partial feed messages can omit type/model. Do not erase resolved metadata
     // unless the vehicle's identity genuinely changed.
-    if (incoming.type === 'other' && previous.type && previous.type !== 'other') merged.type = previous.type;
+    const routeChanged = Boolean(
+      (incoming.hasRouteRefField && incoming.normalizedRef && previous.normalizedRef && incoming.normalizedRef !== previous.normalizedRef) ||
+      (incoming.hasRouteIdField && incoming.routeId && previous.routeId && incoming.routeId !== previous.routeId)
+    );
+    if (incoming.type === 'other' && previous.type && previous.type !== 'other' && !incoming.hasTypeField && !routeChanged) {
+      merged.type = previous.type;
+    }
     const identityChanged = Boolean(incoming.inventory && previous.inventory && incoming.inventory !== previous.inventory);
     if ((incoming.modelName === 'Неизвестен модел' || incoming.modelName === null) && !identityChanged) merged.modelName = previous.modelName;
     if (!incoming.hasSourceTimestamp && previous.hasSourceTimestamp) { merged.timestamp = previous.timestamp; merged.hasSourceTimestamp = true; }
@@ -618,7 +628,7 @@
 
       // Some live sources send direction keys such as D1/D2. Only trust exact
       // key matches; plain numeric values are ambiguous between source schemas.
-      if (dirToken && normaliseRef(key) === dirToken) score -= 15000;
+      if (dirToken && normaliseRef(key) === dirToken) score -= 7500;
 
       const heading = normaliseDirectionText(direction.destination || direction.headsign);
       if (destinationText && heading) {
