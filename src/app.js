@@ -33,6 +33,7 @@
     stops: [],
     stopsByKey: new Map(),
     vehicles: new Map(),
+    tramCompositions: [],
     socket: null,
     socketGeneration: 0,
     reconnectTimer: null,
@@ -1192,6 +1193,23 @@
         .filter((item) => item?.cgm_id && item?.route_ref && item?.type && String(item.type).toLowerCase() !== 'metro')
         .map((item) => [String(item.cgm_id), item]));
 
+      // Optional enhancement used by the reference GTFS cache to show paired
+      // trams as one vehicle. The main map must still work if this file is unavailable.
+      try {
+        const compositionResponse = await fetch('./data/tram-compositions.json', { cache: 'no-cache' });
+        if (compositionResponse.ok) {
+          const compositions = await compositionResponse.json();
+          if (Array.isArray(compositions)) {
+            state.tramCompositions = compositions.filter((pair) =>
+              Array.isArray(pair) && pair.length === 2 &&
+              pair.every((number) => Number.isInteger(Number(number)) && Number(number) > 0)
+            ).map((pair) => pair.map(Number));
+          }
+        }
+      } catch (error) {
+        console.warn('Не успяхме да заредим справочника за трамвайни композиции.', error);
+      }
+
       state.stops = (data.stops || []).map((stop) => ({
         id: String(stop.stop_id ?? stop.stop_code ?? ''),
         code: String(stop.stop_code ?? stop.stop_id ?? ''),
@@ -1318,7 +1336,7 @@
 
   function getFilteredVehicles() {
     const nowSeconds = Date.now() / 1000;
-    return [...state.vehicles.values()].filter((vehicle) => isVehicleFresh(vehicle, nowSeconds) && vehicleMatches(vehicle));
+    return [...state.vehicles.values()].filter((vehicle) => !vehicle.hidden && isVehicleFresh(vehicle, nowSeconds) && vehicleMatches(vehicle));
   }
 
   function cmpVehicles(a, b) {
@@ -1329,7 +1347,7 @@
 
   function updateStats() {
     if (!$('stat-bus') && !$('stat-tram') && !$('stat-trolley')) return;
-    const active = [...state.vehicles.values()].filter(isVehicleFresh);
+    const active = [...state.vehicles.values()].filter((vehicle) => !vehicle.hidden && isVehicleFresh(vehicle));
     if ($('stat-bus')) $('stat-bus').textContent = active.filter((vehicle) => vehicle.type === 'bus').length;
     if ($('stat-tram')) $('stat-tram').textContent = active.filter((vehicle) => vehicle.type === 'tram').length;
     if ($('stat-trolley')) $('stat-trolley').textContent = active.filter((vehicle) => vehicle.type === 'trolley').length;
@@ -1385,7 +1403,7 @@
     const nowSeconds = Date.now() / 1000;
     state.vehicles.forEach((vehicle, id) => {
       const fresh = isVehicleFresh(vehicle, nowSeconds);
-      if (!fresh || !vehicleMatches(vehicle)) {
+      if (!fresh || vehicle.hidden || !vehicleMatches(vehicle)) {
         if (vehicle.marker && state.vehicleLayer.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
         return;
       }
@@ -1589,6 +1607,80 @@
     $('last-updated').textContent = `Обновено ${fmtTime(state.lastSnapshotAt / 1000)}`;
   }
 
+  function singleTramInventory(vehicle) {
+    const inventory = cleanValue(vehicle?.shortInventory || vehicle?.inventory);
+    if (!inventory || /[+/]/.test(inventory)) return null;
+    const number = Number.parseInt(inventory, 10);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function findSingleTramByInventory(inventoryNumber) {
+    for (const vehicle of state.vehicles.values()) {
+      if (vehicle.type !== 'tram') continue;
+      if (singleTramInventory(vehicle) === inventoryNumber) return vehicle;
+    }
+    return null;
+  }
+
+  function hideComposedTramUnit(vehicle) {
+    if (!vehicle) return;
+    vehicle.hidden = true;
+    if (vehicle.marker && state.vehicleLayer?.hasLayer(vehicle.marker)) {
+      state.vehicleLayer.removeLayer(vehicle.marker);
+    }
+    vehicle.marker = null;
+    if (String(state.selectedVehicleId) === String(vehicle.id)) {
+      state.selectedVehicleId = null;
+      clearSelectedVehicleRoute();
+    }
+  }
+
+  function applyGTFSTramCompositions() {
+    for (const [firstNumber, secondNumber] of state.tramCompositions) {
+      const first = findSingleTramByInventory(firstNumber);
+      const second = findSingleTramByInventory(secondNumber);
+      const compositionId = `composition_${firstNumber}_${secondNumber}`;
+      const compositionRef = `${firstNumber}/${String(secondNumber % 100).padStart(2, '0')}`;
+      const existing = state.vehicles.get(compositionId);
+
+      // In GTFS mode the first wagon is sufficient, matching the reference app.
+      if (!first) {
+        if (second) second.hidden = false;
+        if (existing) existing.hidden = true;
+        continue;
+      }
+
+      const marker = existing?.marker || null;
+      const combined = {
+        ...first,
+        id: compositionId,
+        cgmId: compositionId,
+        inventory: compositionRef,
+        shortInventory: compositionRef,
+        hidden: false,
+        marker,
+        raw: {
+          ...(first.raw || {}),
+          cgm_id: compositionId,
+          inv_number: compositionRef,
+          full_inv_number: `${firstNumber}+${secondNumber}`,
+          type: 'tram',
+          route_ref: first.routeRef
+        },
+        // Keep the composition's position and animation in sync with its first wagon.
+        coords: [...first.coords],
+        displayCoords: [...(first.displayCoords || first.coords)],
+        motionFrom: [...(first.motionFrom || first.coords)],
+        motionTo: [...(first.motionTo || first.coords)]
+      };
+      if (existing) Object.assign(existing, combined);
+      else state.vehicles.set(compositionId, combined);
+
+      hideComposedTramUnit(first);
+      hideComposedTramUnit(second);
+    }
+  }
+
   function receiveSnapshot(payload) {
     let vehicles;
     if (Array.isArray(payload)) vehicles = payload;
@@ -1631,6 +1723,7 @@
       }
       state.vehicles.set(vehicle.id, vehicle);
     }
+    applyGTFSTramCompositions();
     state.lastSnapshotAt = now;
     for (const [id, vehicle] of state.vehicles.entries()) {
       if (!isVehicleFresh(vehicle, nowSeconds)) {
@@ -1644,7 +1737,7 @@
         }
       }
     }
-    const activeCount = [...state.vehicles.values()].filter((vehicle) => isVehicleFresh(vehicle, nowSeconds)).length;
+    const activeCount = [...state.vehicles.values()].filter((vehicle) => !vehicle.hidden && isVehicleFresh(vehicle, nowSeconds)).length;
     setConnection('connected', `${CONFIG.sources?.[state.source]?.label || 'ЦГМ'} · ${activeCount} превозни средства`);
     scheduleRender();
   }
