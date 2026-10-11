@@ -479,6 +479,8 @@
         hasMoreMovement = true;
       }
     }
+    const selectedVehicle = state.vehicles.get(String(state.selectedVehicleId));
+    if (selectedVehicle) maintainSelectedVehiclePopup();
     if (hasMoreMovement) state.vehicleAnimationFrame = requestAnimationFrame(animateVehiclePositions);
   }
 
@@ -852,9 +854,9 @@
   }
 
   function installVehiclePopupStyles() {
-    if (document.getElementById('gtsofia-popup-v11')) return;
+    if (document.getElementById('gtsofia-popup-v12')) return;
     const style = document.createElement('style');
-    style.id = 'gtsofia-popup-v11';
+    style.id = 'gtsofia-popup-v12';
     style.textContent = `
       /* A compact side bubble leaves the selected GTFS polyline visible. */
       .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper {
@@ -960,7 +962,7 @@
         width: 42px;
         padding: 0 5px;
         border-radius: 6px;
-        font-size: 13px;
+        font-size: 16px;
         line-height: 1;
         font-weight: 800;
       }
@@ -1206,7 +1208,7 @@
         height: 25px;
         padding: 0 7px;
         border-radius: 6px;
-        font-size: 14px;
+        font-size: 16px;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-inventory-group {
         display: inline-flex;
@@ -1449,7 +1451,8 @@
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon,
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img { width: 25px; height: 25px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon { flex-basis: 25px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill { width: 42px; height: 25px; font-size: 12px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill { width: 42px; height: 25px; font-size: 16px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-top .line-identity-pill { font-size: 16px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-inventory { min-height: 22px; padding: 2px 6px; font-size: 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-card { padding: 8px 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-card > strong { font-size: 13px; }
@@ -1489,6 +1492,7 @@
     state.map.on('moveend zoomend', () => {
       renderStops();
       updateVehicleMarkers();
+      maintainSelectedVehiclePopup();
     });
     setTimeout(() => state.map.invalidateSize(), 50);
   }
@@ -2033,14 +2037,16 @@
     const bounds = state.map.getBounds();
     const nowSeconds = Date.now() / 1000;
     state.vehicles.forEach((vehicle, id) => {
+      const isSelected = String(state.selectedVehicleId) === String(id);
       const fresh = isVehicleFresh(vehicle, nowSeconds);
       if (!fresh || vehicle.hidden || !isVehicleOnActiveRoute(vehicle) || !vehicleMatches(vehicle)) {
         if (vehicle.marker && state.vehicleLayer.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
         return;
       }
-      // Do not instantiate thousands of off-screen markers. This also reduces the
-      // amount of work needed for high-frequency full snapshots.
-      if (!bounds.contains(vehicle.coords) && !vehicle.marker) return;
+      // Keep the selected vehicle mounted even when it leaves the viewport. Removing
+      // its Leaflet marker closes its popup, which also clears the selected route.
+      // Other off-screen markers remain lazy to avoid creating thousands of them.
+      if (!bounds.contains(vehicle.coords) && !vehicle.marker && !isSelected) return;
       const displayCoords = vehicleDisplayCoords(vehicle);
       vehicle.displayCoords = displayCoords;
       if (!vehicle.marker) {
@@ -2066,16 +2072,23 @@
         vehicle.marker.on('click', () => {
           const currentVehicle = state.vehicles.get(String(id)) || vehicle;
           state.selectedVehicleId = String(id);
+          currentVehicle._popupPinnedToViewport = false;
+          currentVehicle.marker?.getPopup()?.setLatLng(currentVehicle.marker.getLatLng());
           const targetZoom = Math.max(15, Math.min(state.map.getZoom(), 16));
           state.map.flyTo(currentVehicle.coords, targetZoom, { duration: .55 });
           renderSelectedVehicleRoute(currentVehicle, true);
         });
         vehicle.marker.on('popupopen', () => {
           const currentVehicle = state.vehicles.get(String(id)) || vehicle;
+          currentVehicle._popupPinnedToViewport = false;
+          currentVehicle.marker?.getPopup()?.setLatLng(currentVehicle.marker.getLatLng());
           currentVehicle._popupHTML = vehiclePopup(currentVehicle);
           currentVehicle._lastPopupRefreshAt = Date.now();
         });
         vehicle.marker.on('popupclose', () => {
+          const currentVehicle = state.vehicles.get(String(id)) || vehicle;
+          currentVehicle._popupPinnedToViewport = false;
+          currentVehicle.marker?.getPopup()?.setLatLng(currentVehicle.marker.getLatLng());
           if (String(state.selectedVehicleId) === String(id)) {
             state.selectedVehicleId = null;
             clearSelectedVehicleRoute();
@@ -2101,13 +2114,56 @@
           }
         }
       }
-      if (bounds.contains(vehicle.coords)) {
+      if (bounds.contains(vehicle.coords) || isSelected) {
         if (!state.vehicleLayer.hasLayer(vehicle.marker)) vehicle.marker.addTo(state.vehicleLayer);
       } else if (state.vehicleLayer.hasLayer(vehicle.marker)) {
         state.vehicleLayer.removeLayer(vehicle.marker);
       }
     });
     scheduleVehicleAnimation();
+  }
+
+  // Keep the selected popup visible while the map is panned away from its vehicle.
+  // The selected route is independent of the viewport and remains in its own layer.
+  function maintainSelectedVehiclePopup() {
+    if (!state.map || state.selectedVehicleId === null || state.selectedVehicleId === undefined) return;
+    const vehicle = state.vehicles.get(String(state.selectedVehicleId));
+    const marker = vehicle?.marker;
+    if (!vehicle || !marker || !state.vehicleLayer?.hasLayer(marker)) return;
+    const popup = marker.getPopup();
+    if (!popup || !marker.isPopupOpen()) return;
+
+    const markerLatLng = marker.getLatLng();
+    if (state.map.getBounds().contains(markerLatLng)) {
+      // Explicitly restore the real vehicle anchor after the popup has been pinned
+      // to the viewport, and keep it synced with the live marker position.
+      popup.setLatLng(markerLatLng);
+      vehicle._popupPinnedToViewport = false;
+      return;
+    }
+
+    const popupElement = popup.getElement();
+    const mapElement = state.map.getContainer();
+    if (!popupElement || !mapElement) return;
+    const popupRect = popupElement.getBoundingClientRect();
+    const mapRect = mapElement.getBoundingClientRect();
+    if (popupRect.width < 1 || popupRect.height < 1) return;
+
+    // Move only the popup's anchor point by the difference between its current
+    // screen position and the desired in-map position; this keeps the bubble visible
+    // without moving the map back toward the selected vehicle.
+    const popupLatLng = popup.getLatLng() || markerLatLng;
+    const anchorPoint = state.map.latLngToContainerPoint(popupLatLng);
+    const desiredLeft = 12;
+    const desiredTop = 12;
+    const currentLeft = popupRect.left - mapRect.left;
+    const currentTop = popupRect.top - mapRect.top;
+    const targetPoint = L.point(
+      anchorPoint.x + desiredLeft - currentLeft,
+      anchorPoint.y + desiredTop - currentTop
+    );
+    popup.setLatLng(state.map.containerPointToLatLng(targetPoint));
+    vehicle._popupPinnedToViewport = true;
   }
 
   function vehicleIconSignature(vehicle) {
@@ -2390,6 +2446,7 @@
       updateLastUpdated();
       updateStats();
       updateVehicleMarkers();
+      maintainSelectedVehiclePopup();
       refreshSelectedVehicleRoute();
       // Keep the live vehicle inventory list in sync with incoming snapshots.
       renderVehicleList();
@@ -2479,7 +2536,11 @@
       syncLinePickerSelection();
       $('search-input').value = '';
     }
+    state.selectedVehicleId = String(id);
+    vehicle._popupPinnedToViewport = false;
     updateVehicleMarkers();
+    if (vehicle.marker?.getPopup()) vehicle.marker.getPopup().setLatLng(vehicle.marker.getLatLng());
+    renderSelectedVehicleRoute(vehicle, false);
     state.map.flyTo(vehicle.coords, Math.max(state.map.getZoom(), 16), { duration: .6 });
     setTimeout(() => {
       const currentVehicle = state.vehicles.get(String(id));
