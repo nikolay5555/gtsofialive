@@ -1206,7 +1206,7 @@
         height: 25px;
         padding: 0 7px;
         border-radius: 6px;
-        font-size: 14px;
+        font-size: 16px;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-inventory-group {
         display: inline-flex;
@@ -1449,7 +1449,7 @@
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon,
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img { width: 25px; height: 25px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon { flex-basis: 25px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill { width: 42px; height: 25px; font-size: 12px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill { width: 42px; height: 25px; font-size: 16px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-inventory { min-height: 22px; padding: 2px 6px; font-size: 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-card { padding: 8px 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-card > strong { font-size: 13px; }
