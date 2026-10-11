@@ -581,3 +581,123 @@ body.dark-theme {
 @media (prefers-reduced-motion: reduce) {
   .project-link { transition: none; }
 }
+
+
+/* ========================= Marker parity + legible typography ========================= */
+/* Vehicle markers use the same SVG construction and type colours as
+   Dimitar5555/sofiatraffic-livemap. */
+.vehicle-tram > svg { fill: var(--tram-color, #f6921e); }
+.vehicle-trolley > svg { fill: var(--trolley-color, #0095da); }
+.vehicle-bus > svg { fill: var(--bus-color, #be1e2d); }
+.vehicle-night > svg { fill: var(--night-color, #000); }
+.vehicle-other > svg { fill: #6b7280; }
+.vehicle-inactive { opacity: .75; }
+.svg_text {
+  font-weight: 800;
+  font-family: sans-serif;
+  fill: #fff;
+  text-align: center;
+  vertical-align: middle;
+}
+.svg_small { font-size: 14px; }
+.svg_large { font-size: 16px; }
+.leaflet-div-icon { background: none; border: none; }
+
+/* Match the main GTSofia project's route icon and pill sizes in every context,
+   including compact rows and the line filter dropdown. */
+.line-identity-icon,
+.line-identity-icon img {
+  width: 30px !important;
+  height: 30px !important;
+}
+.line-identity-icon {
+  flex: 0 0 30px !important;
+}
+.line-identity-pill,
+.line-identity-pill.metro,
+.line-identity.compact .line-identity-pill,
+.line-picker-option .line-identity.compact .line-identity-pill,
+.line-picker-option .line-identity.compact .line-identity-pill.metro {
+  width: 60px !important;
+  min-width: 60px !important;
+  max-width: 60px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 4px !important;
+  border-radius: 6px !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+}
+.line-identity-pill.metro { border-radius: 6px !important; }
+
+/* Bring secondary interface text closer to the main GTSofia scale without
+   changing the established layout or making the panels feel oversized. */
+.topbar-kicker { font-size: 11px; }
+.topbar-title { font-size: 15px; }
+.topbar-live-label { font-size: 13px; }
+.sidebar-intro p { font-size: 14px; line-height: 1.5; }
+.eyebrow { font-size: 11px; }
+.connection-copy strong { font-size: 13px; }
+.connection-copy span { font-size: 12px; line-height: 1.3; }
+.stat-label { font-size: 11px; }
+.stat-value { font-size: 24px; }
+.section-title-row h2,
+.layer-section h2,
+.vehicles-title-row h2 { font-size: 14px; }
+.text-button { font-size: 12px; }
+.search-field input { font-size: 13px; }
+.field-label { font-size: 11px; }
+.select-field { font-size: 13px; }
+.toggle-copy strong { font-size: 13px; }
+.toggle-copy small { font-size: 11px; }
+.vehicles-title-row p { font-size: 11px; }
+.result-count { font-size: 12px; }
+.list-tab { font-size: 12px; }
+.vehicle-row-title { font-size: 13px; }
+.vehicle-row-subtitle { font-size: 11px; }
+.vehicle-speed { font-size: 11px; }
+.vehicle-updated { font-size: 10px; }
+.delay-pill { font-size: 10px; }
+.empty-state strong { font-size: 13px; }
+.empty-state p { font-size: 12px; }
+.data-meta,
+.data-meta strong { font-size: 11px; }
+.settings-button,
+.secondary-button { font-size: 12px; }
+.settings-note { font-size: 11px; }
+.map-context-pill strong { font-size: 13px; }
+.map-context-pill small { font-size: 11px; }
+.map-action-button,
+.map-reset-button { font-size: 12px; }
+.legend-item { font-size: 11px; }
+.map-toast { font-size: 13px; }
+.map-credit { font-size: 10px; }
+.leaflet-popup-content { font-size: 13px; }
+.vehicle-popup-item span { font-size: 10px; }
+.vehicle-popup-item strong { font-size: 12px; }
+
+/* Keep the updated line labels readable on narrow screens as well. */
+@media (max-width: 760px) {
+  .line-identity-icon,
+  .line-identity-icon img { width: 30px !important; height: 30px !important; }
+  .line-identity-icon { flex-basis: 30px !important; }
+  .line-identity-pill,
+  .line-identity-pill.metro,
+  .line-identity.compact .line-identity-pill,
+  .line-picker-option .line-identity.compact .line-identity-pill,
+  .line-picker-option .line-identity.compact .line-identity-pill.metro {
+    width: 60px !important;
+    min-width: 60px !important;
+    max-width: 60px !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    font-size: 16px !important;
+  }
+  /* Preserve the icon-only map action buttons on small screens. */
+  .map-action-button { font-size: 0; }
+  .map-action-button span { font-size: 18px; }
+  .map-credit { font-size: 9px; }
+}
+@media (max-width: 390px) {
+  .map-credit { font-size: 8px; }
+}
