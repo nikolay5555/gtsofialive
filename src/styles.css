@@ -275,7 +275,7 @@ body.dark-theme {
 .line-identity.compact { gap: 4px; }
 .line-identity.compact .line-identity-icon, .line-identity.compact .line-identity-icon img { width: 25px; height: 25px; }
 .line-identity.compact .line-identity-icon { flex-basis: 25px; }
-.line-identity.compact .line-identity-pill { width: 42px; min-width: 34px; height: 25px; padding: 0 6px; font-size: 12px; }
+.line-identity.compact .line-identity-pill { width: 42px; min-width: 34px; height: 25px; padding: 0 6px; font-size: 12px; border-radius: 6px; }
 .line-identity.compact .line-identity-pill.metro { width: 28px; min-width: 28px; border-radius: 50%; }
 .vehicle-popup { min-width: 215px; padding: 2px 1px; }
 .vehicle-popup-top { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
@@ -295,7 +295,7 @@ body.dark-theme {
   .line-identity.compact { gap: 2px; }
   .line-identity.compact .line-identity-icon, .line-identity.compact .line-identity-icon img { width: 25px; height: 25px; }
   .line-identity.compact .line-identity-icon { flex-basis: 25px; }
-  .line-identity.compact .line-identity-pill { height: 25px; min-width: 31px; font-size: 11px; }
+  .line-identity.compact .line-identity-pill { height: 25px; width: 42px; font-size: 11px; border-radius: 6px; }
 }
 
 .action-icon-image { display: block; width: 17px; height: 17px; object-fit: contain; flex: 0 0 auto; }
@@ -368,7 +368,7 @@ body.dark-theme {
 .vehicle-popup-top .line-identity { gap: 4px; }
 .vehicle-popup-top .line-identity-icon, .vehicle-popup-top .line-identity-icon img { width: 25px; height: 25px; }
 .vehicle-popup-top .line-identity-icon { flex-basis: 25px; }
-.vehicle-popup-top .line-identity-pill { height: 25px; width: 42px; width: auto; padding: 0 6px; font-size: 12px; }
+.vehicle-popup-top .line-identity-pill { height: 25px; width: 42px; padding: 0 6px; font-size: 12px; border-radius: 6px; }
 .vehicle-popup-heading { gap: 2px; }
 .vehicle-popup-heading strong { font-size: 12px; line-height: 1.2; }
 .vehicle-popup-heading small { font-size: 10px; }
@@ -468,7 +468,7 @@ body.dark-theme {
 .line-picker-trigger .line-identity.compact .line-identity-icon,
 .line-picker-trigger .line-identity.compact .line-identity-icon img { width: 25px; height: 25px; }
 .line-picker-trigger .line-identity.compact .line-identity-icon { flex-basis: 25px; }
-.line-picker-trigger .line-identity.compact .line-identity-pill { height: 25px; width: 42px; font-size: 12px; }
+.line-picker-trigger .line-identity.compact .line-identity-pill { height: 25px; width: 42px; font-size: 12px; border-radius: 6px; }
 .line-picker-caret {
   flex: 0 0 7px;
   width: 7px;
@@ -527,7 +527,7 @@ body.dark-theme {
 .line-picker-option .line-identity.compact .line-identity-icon,
 .line-picker-option .line-identity.compact .line-identity-icon img { width: 25px; height: 25px; }
 .line-picker-option .line-identity.compact .line-identity-icon { flex-basis: 25px; }
-.line-picker-option .line-identity.compact .line-identity-pill { width: 42px; height: 25px; font-size: 12px; }
+.line-picker-option .line-identity.compact .line-identity-pill { width: 42px; height: 25px; font-size: 12px; border-radius: 6px; }
 .line-picker-option .line-identity.compact .line-identity-pill.metro { width: 27px; min-width: 27px; }
 .line-picker-all { min-height: 34px; padding-left: 10px; font-size: 12px; font-weight: 700; }
 .dark-theme .line-picker-menu { box-shadow: 0 12px 32px rgba(0,0,0,.38); }
