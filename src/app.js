@@ -43,7 +43,7 @@
     reconnectTimer: null,
     source: 'gtfs',
     view: 'vehicles',
-    selectedType: 'all',
+    unexpectedOnly: false,
     selectedRoute: 'all',
     query: '',
     showStops: false,
@@ -1635,6 +1635,12 @@
     return `${type}::${normaliseRef(ref)}`;
   }
 
+  function lineDisplayName(ref, type) {
+    const cleanRef = cleanValue(ref);
+    const typeName = TYPE_NAMES[type] || TYPE_NAMES.other;
+    return cleanRef ? `${typeName} ${cleanRef}` : typeName;
+  }
+
   function linePickerGroup(item) {
     if (item.type === 'metro') return 'metro';
     if (item.type === 'tram') return 'tram';
@@ -1660,8 +1666,8 @@
 
     const item = state.lineFilterItems.find((candidate) => candidate.value === state.selectedRoute);
     if (item) {
-      current.innerHTML = lineIdentityMarkup(item.ref, item.type, item.color, true);
-      trigger.setAttribute('aria-label', `Избрана линия ${item.ref}, ${TYPE_NAMES[item.type] || TYPE_NAMES.other}`);
+      current.textContent = lineDisplayName(item.ref, item.type);
+      trigger.setAttribute('aria-label', `Избрана линия ${lineDisplayName(item.ref, item.type)}`);
     } else {
       current.textContent = 'Всички линии';
       trigger.setAttribute('aria-label', 'Линия: всички линии');
@@ -1702,10 +1708,10 @@
     // This live map intentionally lists only modes with realtime surface vehicles.
     const groupOrder = ['tram', 'trolley', 'bus', 'night'];
     const groupTitles = {
-      tram: 'Трамвайни линии',
-      trolley: 'Тролейбусни линии',
-      bus: 'Автобусни линии',
-      night: 'Нощни линии'
+      tram: 'Трамваи',
+      trolley: 'Тролеи',
+      bus: 'Автобуси',
+      night: 'Нощни автобуси'
     };
     state.lineFilterItems = [...selectableByIdentity.values()]
       .map((item) => ({ ...item, group: linePickerGroup(item) }))
@@ -1731,9 +1737,9 @@
         option.textContent = 'Всички линии';
         option.setAttribute('aria-label', 'Всички линии');
       } else {
-        option.innerHTML = lineIdentityMarkup(item.ref, item.type, item.color, true);
-        option.setAttribute('aria-label', `Линия ${item.ref}, ${TYPE_NAMES[item.type] || TYPE_NAMES.other}`);
-        option.title = `${item.ref} · ${TYPE_NAMES[item.type] || TYPE_NAMES.other}`;
+        option.textContent = lineDisplayName(item.ref, item.type);
+        option.setAttribute('aria-label', lineDisplayName(item.ref, item.type));
+        option.title = lineDisplayName(item.ref, item.type);
       }
       menu.appendChild(option);
     };
@@ -1768,7 +1774,7 @@
     return L.divIcon({
       className: 'vehicle-marker-wrap',
       html: `<span class="vehicle-pin${inactiveClass}" style="--line-color:${escapeHTML(color)};--bearing:${bearing}deg"><span class="vehicle-label">${escapeHTML(label)}</span></span>`,
-      iconSize: [31, 34], iconAnchor: [15, 17], popupAnchor: [0, -15]
+      iconSize: [40, 43], iconAnchor: [19, 22], popupAnchor: [0, -20]
     });
   }
 
@@ -1856,10 +1862,14 @@
     const line = vehicle.routeRef || '—';
     const destination = resolveVehicleDestination(vehicle);
     const nextStop = resolveNextStop(vehicle);
-    const speed = vehicle.speed === null ? '—' : `${Math.max(0, Math.round(vehicle.speed))} km/h`;
-    const model = vehicle.modelName || 'Моделът не е разпознат';
+    const speed = Number.isFinite(Number(vehicle.speed)) && vehicle.speed !== null
+      ? `${Math.max(0, Math.round(vehicle.speed))} km/h`
+      : '';
+    const model = cleanValue(vehicle.modelName);
     const inventory = displayInventoryNumber(vehicle.inventory || vehicle.shortInventory);
     const isUnexpected = !isVehicleExpectedOnLine(vehicle);
+    const hasDestination = destination && destination !== 'Няма данни за дестинацията';
+    const hasNextStop = nextStop && nextStop !== 'Няма данни за следваща спирка';
     return `<div class="vehicle-popup-card" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
       <div class="vehicle-popup-card-head">
         <div class="vehicle-popup-route">${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}</div>
@@ -1868,29 +1878,27 @@
           ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">⚠</button>` : ''}
         </div>
       </div>
-      <div class="vehicle-popup-destination-card">
+      ${hasDestination ? `<div class="vehicle-popup-destination-card">
         <span class="vehicle-popup-card-label"><img src="./assets/icons/destinationarrow.svg" alt="" aria-hidden="true">Дестинация</span>
         <strong>${escapeHTML(destination)}</strong>
-      </div>
-      <div class="vehicle-popup-details-grid">
-        <div class="vehicle-popup-next-stop">
+      </div>` : ''}
+      ${(hasNextStop || model) ? `<div class="vehicle-popup-details-grid${hasNextStop && model ? '' : ' single'}">
+        ${hasNextStop ? `<div class="vehicle-popup-next-stop">
           <span class="vehicle-popup-card-label"><span class="vehicle-popup-label-symbol" aria-hidden="true">⌖</span>Следваща спирка</span>
           <strong>${escapeHTML(nextStop)}</strong>
-        </div>
-        <div class="vehicle-popup-model-card">
+        </div>` : ''}
+        ${model ? `<div class="vehicle-popup-model-card">
           <span class="vehicle-popup-card-label">Марка / модел</span>
           <strong>${escapeHTML(model)}</strong>
-        </div>
-      </div>
-      <div class="vehicle-popup-metrics">
+        </div>` : ''}
+      </div>` : ''}
+      ${speed ? `<div class="vehicle-popup-metrics vehicle-popup-metrics-compact">
         <div class="vehicle-popup-metric"><span>Скорост</span><strong>${escapeHTML(speed)}</strong></div>
-        <div class="vehicle-popup-metric vehicle-popup-last-signal"><span>Последно обновяване</span><strong>${escapeHTML(timeAgo(vehicle.timestamp))}</strong></div>
-      </div>
+      </div>` : ''}
     </div>`;
   }
 
   function vehicleMatches(vehicle) {
-    if (state.selectedType !== 'all' && vehicle.type !== state.selectedType) return false;
     const selectedRoute = selectedRouteParts();
     if (selectedRoute && vehicle.normalizedRef !== selectedRoute.ref) return false;
     if (selectedRoute?.type && vehicle.type !== selectedRoute.type) return false;
@@ -1945,45 +1953,81 @@
   }
 
   function renderVehicleList() {
-    if (!$('vehicle-list')) return;
-    const active = getFilteredVehicles();
-    let vehicles = active.slice();
     const list = $('vehicle-list');
-    const isDelayView = state.view === 'delays';
-    $('results-heading').textContent = isDelayView ? 'Закъснения' : 'Превозни средства';
-    $('results-subtitle').textContent = isDelayView ? 'Оценка спрямо разписанието' : 'Избери превозно средство на картата';
-    if (isDelayView) {
-      vehicles = vehicles.filter((vehicle) => calcDelay(vehicle) !== null).sort((a, b) => (calcDelay(b) ?? 0) - (calcDelay(a) ?? 0));
-    } else {
-      vehicles.sort(cmpVehicles);
+    if (!list) return;
+
+    let vehicles = getFilteredVehicles().filter((vehicle) =>
+      Boolean(cleanValue(vehicle.shortInventory || vehicle.inventory))
+    );
+    if (state.unexpectedOnly) {
+      vehicles = vehicles.filter((vehicle) => !isVehicleExpectedOnLine(vehicle));
     }
-    $('result-count').textContent = String(vehicles.length);
+    vehicles.sort(cmpVehicles);
+
+    const count = $('result-count');
+    if (count) count.textContent = String(vehicles.length);
+
     if (!vehicles.length) {
-      const title = state.vehicles.size === 0 ? 'Изчакваме първите позиции' : isDelayView ? 'Няма данни за закъсненията' : 'Няма съвпадения';
+      const title = state.vehicles.size === 0
+        ? 'Изчакваме първите позиции'
+        : state.unexpectedOnly
+          ? 'Няма необичайни превозни средства'
+          : 'Няма съвпадения';
       const description = state.vehicles.size === 0
-        ? 'Когато връзката се активира, тук ще се появят превозните средства.'
-        : isDelayView
-          ? 'Източникът може да не подава разписание за всяко превозно средство.'
-          : 'Промени търсенето или изчисти филтрите.';
-      list.innerHTML = `<div class="empty-state"><span class="empty-state-icon">⌁</span><strong>${escapeHTML(title)}</strong><p>${escapeHTML(description)}</p></div>`;
+        ? 'Когато live източникът подаде позиции, те ще се появят тук.'
+        : state.unexpectedOnly
+          ? 'Сред текущите позиции няма превозни средства, отбелязани като необичайни.'
+          : 'Промени избраната линия или търсенето, или изчисти филтрите.';
+      list.innerHTML = `<div class="empty-state"><strong>${escapeHTML(title)}</strong><p>${escapeHTML(description)}</p></div>`;
       return;
     }
+
+    const groups = new Map();
+    vehicles.forEach((vehicle) => {
+      const groupKey = `${vehicle.type}::${normaliseRef(vehicle.routeRef)}`;
+      if (!groups.has(groupKey)) groups.set(groupKey, { type: vehicle.type, ref: vehicle.routeRef, vehicles: [] });
+      groups.get(groupKey).vehicles.push(vehicle);
+    });
+
     const fragment = document.createDocumentFragment();
-    vehicles.slice(0, 180).forEach((vehicle) => {
-      const delay = delayView(vehicle);
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'vehicle-row';
-      row.dataset.vehicleId = vehicle.id;
-      const subtitle = resolveNextStop(vehicle) !== 'Няма данни за следваща спирка' ? resolveNextStop(vehicle) : (TYPE_NAMES[vehicle.type] || TYPE_NAMES.other);
-      const meta = isDelayView
-        ? `<span class="delay-pill ${delay.className}">${escapeHTML(delay.label)}</span><span class="vehicle-updated">${escapeHTML(timeAgo(vehicle.timestamp))}</span>`
-        : `<span class="vehicle-speed">${vehicle.speed === null ? '—' : `${Math.max(0, Math.round(vehicle.speed))} km/h`}</span><span class="vehicle-updated">${escapeHTML(timeAgo(vehicle.timestamp))}</span>`;
-      row.innerHTML = `${lineIdentityMarkup(vehicle.routeRef, vehicle.type, getVehicleColor(vehicle), true)}
-        <span class="vehicle-row-main"><span class="vehicle-row-title">${escapeHTML(vehicle.inventory)}</span><span class="vehicle-row-subtitle">${escapeHTML(subtitle)}</span></span>
-        <span class="vehicle-row-meta">${meta}</span>`;
-      row.addEventListener('click', () => focusVehicle(vehicle.id));
-      fragment.appendChild(row);
+    const typeOrder = { tram: 0, trolley: 1, bus: 2, metro: 3, other: 4 };
+    const orderedGroups = [...groups.values()].sort((a, b) =>
+      (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9) ||
+      String(a.ref || '').localeCompare(String(b.ref || ''), 'bg', { numeric: true })
+    );
+    orderedGroups.forEach((group) => {
+      const section = document.createElement('section');
+      section.className = 'vehicle-line-group';
+      const heading = document.createElement('div');
+      heading.className = 'vehicle-line-group-title';
+      const title = document.createElement('strong');
+      title.textContent = lineDisplayName(group.ref, group.type);
+      const quantity = document.createElement('span');
+      quantity.textContent = String(group.vehicles.length);
+      quantity.setAttribute('aria-label', `${group.vehicles.length} превозни средства`);
+      heading.append(title, quantity);
+      section.appendChild(heading);
+
+      group.vehicles.forEach((vehicle) => {
+        const inventory = displayInventoryNumber(vehicle.shortInventory || vehicle.inventory);
+        const nextStop = resolveNextStop(vehicle);
+        const destination = resolveVehicleDestination(vehicle);
+        const secondaryText = destination !== 'Няма данни за дестинацията'
+          ? destination
+          : nextStop !== 'Няма данни за следваща спирка' ? nextStop : (vehicle.modelName || 'Няма допълнителни данни');
+        const unusual = !isVehicleExpectedOnLine(vehicle);
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'vehicle-list-item';
+        row.dataset.vehicleId = String(vehicle.id);
+        row.title = `Покажи ${lineDisplayName(vehicle.routeRef, vehicle.type)}, инв. № ${inventory} на картата`;
+        row.setAttribute('aria-label', row.title);
+        row.innerHTML = `<span class="vehicle-list-inventory">${escapeHTML(inventory)}</span>
+          <span class="vehicle-list-copy"><strong>${escapeHTML(vehicle.modelName || 'Превозно средство')}</strong><small>${escapeHTML(secondaryText)}</small></span>
+          ${unusual ? '<span class="vehicle-list-unusual" title="Необичайно превозно средство" aria-label="Необичайно превозно средство">⚠</span>' : '<span class="vehicle-list-arrow" aria-hidden="true">↗</span>'}`;
+        section.appendChild(row);
+      });
+      fragment.appendChild(section);
     });
     list.replaceChildren(fragment);
   }
@@ -2351,7 +2395,7 @@
       updateStats();
       updateVehicleMarkers();
       refreshSelectedVehicleRoute();
-      // The filter-only sidebar intentionally contains no vehicle list.
+      // Keep the live vehicle inventory list in sync with incoming snapshots.
       renderVehicleList();
     });
   }
@@ -2434,17 +2478,17 @@
     const vehicle = state.vehicles.get(String(id));
     if (!vehicle || !state.map) return;
     if (!vehicleMatches(vehicle)) {
-      state.selectedType = 'all';
       state.selectedRoute = 'all';
       state.query = '';
-      $('type-filter').value = 'all';
       syncLinePickerSelection();
       $('search-input').value = '';
     }
     updateVehicleMarkers();
-    const marker = vehicle.marker;
     state.map.flyTo(vehicle.coords, Math.max(state.map.getZoom(), 16), { duration: .6 });
-    setTimeout(() => { if (marker) marker.openPopup(); }, 650);
+    setTimeout(() => {
+      const currentVehicle = state.vehicles.get(String(id));
+      if (currentVehicle?.marker) currentVehicle.marker.openPopup();
+    }, 750);
   }
 
   function setTheme(dark) {
@@ -2465,12 +2509,13 @@
       updateVehicleMarkers();
       renderVehicleList();
     });
-    $('type-filter')?.addEventListener('change', (event) => {
-      state.selectedType = event.target.value;
-      clearSelectedVehicleRoute();
-      state.selectedVehicleId = null;
-      updateVehicleMarkers();
+    $('unexpected-only')?.addEventListener('change', (event) => {
+      state.unexpectedOnly = Boolean(event.target.checked);
       renderVehicleList();
+    });
+    $('vehicle-list')?.addEventListener('click', (event) => {
+      const row = event.target.closest('.vehicle-list-item');
+      if (row?.dataset.vehicleId) focusVehicle(row.dataset.vehicleId);
     });
     const linePickerTrigger = $('line-filter-trigger');
     const linePickerMenu = $('line-filter-menu');
@@ -2538,10 +2583,10 @@
       });
     }, true);
     $('clear-filters')?.addEventListener('click', () => {
-      state.selectedType = 'all';
       state.selectedRoute = 'all';
       state.query = '';
-      if ($('type-filter')) $('type-filter').value = 'all';
+      state.unexpectedOnly = false;
+      if ($('unexpected-only')) $('unexpected-only').checked = false;
       syncLinePickerSelection();
       if ($('search-input')) $('search-input').value = '';
       clearSelectedVehicleRoute();

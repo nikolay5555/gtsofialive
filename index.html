@@ -10,11 +10,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-  <link rel="stylesheet" href="src/styles.css?v=gtfs-parity-20261010-13">
+  <link rel="stylesheet" href="src/styles.css?v=gtsofia-sidebar-20261011-14">
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script defer src="src/config.js?v=gtfs-parity-20261010-13"></script>
   <script defer src="src/models.js?v=gtfs-parity-20261010"></script>
-  <script defer src="src/app.js?v=gtfs-parity-20261010-13"></script>
+  <script defer src="src/app.js?v=gtsofia-sidebar-20261011-14"></script>
 </head>
 <body>
   <header class="topbar">
@@ -23,19 +23,10 @@
   </header>
 
   <main class="workspace">
-    <aside class="sidebar" aria-label="Филтри на картата">
+    <aside class="sidebar" aria-label="Филтри и превозни средства">
       <section class="filter-section">
         <div class="section-title-row"><h2>Филтри</h2><button id="clear-filters" class="text-button" type="button">Изчисти</button></div>
         <label class="search-field"><span class="search-icon" aria-hidden="true">⌕</span><input id="search-input" type="search" placeholder="Линия или инв. номер" autocomplete="off"></label>
-        <div class="filter-control">
-          <label class="field-label" for="type-filter">Вид транспорт</label>
-          <select id="type-filter" class="select-field">
-            <option value="all">Всички видове</option>
-            <option value="bus">Автобуси</option>
-            <option value="tram">Трамваи</option>
-            <option value="trolley">Тролеи</option>
-          </select>
-        </div>
         <div class="filter-control">
           <label class="field-label" id="line-filter-label" for="line-filter-trigger">Линия</label>
           <div class="line-picker">
@@ -45,6 +36,23 @@
             </button>
             <div id="line-filter-menu" class="line-picker-menu" role="listbox" aria-labelledby="line-filter-label" hidden></div>
           </div>
+        </div>
+      </section>
+      <section class="vehicles-section" aria-labelledby="vehicles-heading">
+        <div class="vehicles-title-row">
+          <div>
+            <h2 id="vehicles-heading">Превозни средства</h2>
+            <p id="results-subtitle">Избери превозно средство, за да го видиш на картата</p>
+          </div>
+          <span class="result-count" id="result-count" aria-live="polite">0</span>
+        </div>
+        <label class="unexpected-only-toggle" for="unexpected-only">
+          <input id="unexpected-only" type="checkbox">
+          <span class="unexpected-checkbox" aria-hidden="true"></span>
+          <span>Необичайни превозни средства</span>
+        </label>
+        <div id="vehicle-list" class="vehicle-list" aria-label="Списък с превозни средства">
+          <div class="empty-state"><strong>Изчакваме първите позиции</strong><p>Когато се свърже live източникът, тук ще се появят превозните средства.</p></div>
         </div>
       </section>
     </aside>
