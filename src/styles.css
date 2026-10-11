@@ -509,12 +509,12 @@ body.dark-theme {
 }
 .line-picker-option {
   display: flex;
-  width: 100%;
-  min-height: 35px;
+  width: 42px;
+  height: 25px;
   align-items: center;
   padding: 4px 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-mid);
   text-align: left;
@@ -525,10 +525,10 @@ body.dark-theme {
 .line-picker-option[aria-selected="true"] { background: var(--surface-soft); }
 .line-picker-option .line-identity { justify-content: flex-start; gap: 7px; }
 .line-picker-option .line-identity.compact .line-identity-icon,
-.line-picker-option .line-identity.compact .line-identity-icon img { width: 25px; height: 25px; }
+.line-picker-option .line-identity.compact .line-identity-icon img { width: 42px; height: 25px; }
 .line-picker-option .line-identity.compact .line-identity-icon { flex-basis: 25px; }
-.line-picker-option .line-identity.compact .line-identity-pill { min-width: 34px; height: 27px; font-size: 12px; }
-.line-picker-option .line-identity.compact .line-identity-pill.metro { width: 27px; min-width: 27px; }
+.line-picker-option .line-identity.compact .line-identity-pill { width: 42px; height: 25px; font-size: 12px; }
+.line-picker-option .line-identity.compact .line-identity-pill.metro { width: 42px; min-width: 27px; }
 .line-picker-all { min-height: 34px; padding-left: 10px; font-size: 12px; font-weight: 700; }
 .dark-theme .line-picker-menu { box-shadow: 0 12px 32px rgba(0,0,0,.38); }
 @media (max-width: 760px) {
