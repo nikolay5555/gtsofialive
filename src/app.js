@@ -2008,25 +2008,21 @@
       heading.append(title, quantity);
       section.appendChild(heading);
 
+      const vehicleGrid = document.createElement('div');
+      vehicleGrid.className = 'vehicle-line-group-grid';
       group.vehicles.forEach((vehicle) => {
         const inventory = displayInventoryNumber(vehicle.shortInventory || vehicle.inventory);
-        const nextStop = resolveNextStop(vehicle);
-        const destination = resolveVehicleDestination(vehicle);
-        const secondaryText = destination !== 'Няма данни за дестинацията'
-          ? destination
-          : nextStop !== 'Няма данни за следваща спирка' ? nextStop : (vehicle.modelName || 'Няма допълнителни данни');
         const unusual = !isVehicleExpectedOnLine(vehicle);
         const row = document.createElement('button');
         row.type = 'button';
-        row.className = 'vehicle-list-item';
+        row.className = `vehicle-list-item${unusual ? ' is-unusual' : ''}`;
         row.dataset.vehicleId = String(vehicle.id);
-        row.title = `Покажи ${lineDisplayName(vehicle.routeRef, vehicle.type)}, инв. № ${inventory} на картата`;
+        row.title = `${unusual ? 'Необичайно превозно средство · ' : ''}Покажи ${lineDisplayName(vehicle.routeRef, vehicle.type)}, инв. № ${inventory} на картата`;
         row.setAttribute('aria-label', row.title);
-        row.innerHTML = `<span class="vehicle-list-inventory">${escapeHTML(inventory)}</span>
-          <span class="vehicle-list-copy"><strong>${escapeHTML(vehicle.modelName || 'Превозно средство')}</strong><small>${escapeHTML(secondaryText)}</small></span>
-          ${unusual ? '<span class="vehicle-list-unusual" title="Необичайно превозно средство" aria-label="Необичайно превозно средство">⚠</span>' : '<span class="vehicle-list-arrow" aria-hidden="true">↗</span>'}`;
-        section.appendChild(row);
+        row.textContent = inventory;
+        vehicleGrid.appendChild(row);
       });
+      section.appendChild(vehicleGrid);
       fragment.appendChild(section);
     });
     list.replaceChildren(fragment);
