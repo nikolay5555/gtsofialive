@@ -486,7 +486,6 @@
     if (!previous) {
       incoming.timestamp = incoming.timestamp ?? now / 1000;
       incoming.bearing = incoming.bearing ?? 0;
-      incoming._hasMoved = false;
       incoming.inventory = incoming.inventory ?? null;
       incoming.shortInventory = incoming.shortInventory ?? incoming.inventory;
       incoming.displayCoords = [...incoming.coords];
@@ -586,12 +585,9 @@
     merged.color = vehicleRouteColor(merged);
 
     if (Number(merged.speed) >= MIN_ACTIVE_SPEED) {
-      const coordinatesChanged = oldLat !== newLat || oldLon !== newLon;
-      merged.bearing = coordinatesChanged ? calculateBearing(previous.coords, incoming.coords) : (previous.bearing ?? 0);
-      merged._hasMoved = Boolean(previous._hasMoved || coordinatesChanged);
+      merged.bearing = oldLat === newLat && oldLon === newLon ? 0 : calculateBearing(previous.coords, incoming.coords);
     } else {
       merged.bearing = 0;
-      merged._hasMoved = false;
     }
 
     const distance = distanceMetersBetween(visualStart, incoming.coords);
@@ -1763,53 +1759,16 @@
   }
 
   function vehicleIcon(vehicle) {
-    const routeRef = cleanValue(vehicle.routeRef);
+    const color = getVehicleColor(vehicle);
+    const label = vehicle.routeRef || '—';
     const age = Date.now() / 1000 - (vehicle.timestamp || 0);
-    const inactiveClass = age > 60 ? 'vehicle-inactive' : '';
-    const isActive = Number(vehicle.speed) > MIN_ACTIVE_SPEED && Boolean(vehicle._hasMoved);
+    const inactiveClass = age > 60 ? ' inactive' : '';
     const bearing = Number.isFinite(vehicle.bearing) ? vehicle.bearing : 0;
-
-    // Same SVG geometry, dimensions, typography, and route-type colours as
-    // Dimitar5555/sofiatraffic-livemap. RotatedMarker rotates the whole marker
-    // while the label is counter-rotated, keeping the line number horizontal.
-    const reduceMarker = Boolean(vehicle.reduce_marker ?? vehicle.reduceMarker ?? vehicle.raw?.reduce_marker);
-    const width = reduceMarker ? 29 / 3 : 29;
-    const halfWidth = width / 2;
-    const height = 45;
-    const triangleAcutePoint = `${halfWidth},${height}`;
-    const triangleSideMargin = 1.75;
-    const triangleLeftPoint = `${triangleSideMargin - 0.75},20`;
-    const triangleRightPoint = `${width - triangleSideMargin + 0.75},20`;
-    const className = routeRef && routeRef.length <= 2 ? 'large' : 'small';
-    const svgOpen = `<svg width="${width + 1}" height="${height + 1}" viewBox="-0.5 -0.5 ${width + 0.5} ${height + 0.5}" xmlns="http://www.w3.org/2000/svg">`;
-    const circle = `<circle stroke="black" stroke-width="0.95px" cx="${halfWidth}" cy="${halfWidth}" r="${halfWidth}"/>`;
-    const triangle = `<polygon points="${triangleLeftPoint} ${triangleRightPoint} ${triangleAcutePoint}"/>`;
-    const triangleOutline = `<g stroke="black" stroke-width="0.95px"><line x1="${triangleLeftPoint.split(',')[0]}" y1="${triangleLeftPoint.split(',')[1]}" x2="${triangleAcutePoint.split(',')[0]}" y2="${triangleAcutePoint.split(',')[1]}"/><line x1="${triangleRightPoint.split(',')[0]}" y1="${triangleRightPoint.split(',')[1]}" x2="${triangleAcutePoint.split(',')[0]}" y2="${triangleAcutePoint.split(',')[1]}"/></g>`;
-    const textTransform = isActive ? `rotate(${-bearing + 360} ${halfWidth} ${halfWidth})` : '';
-    const label = `<text x="${halfWidth}px" y="${halfWidth}px" dominant-baseline="middle" text-anchor="middle" class="svg_text svg_${className}" transform-origin="${halfWidth} ${halfWidth}" ${textTransform ? `transform="${textTransform}"` : ''}>${escapeHTML(routeRef)}</text>`;
-    const svgClose = '</svg>';
-
-    const markerType = routeRef.startsWith('N') ? 'night' : vehicle.type;
-    const markerTypeClass = ['bus', 'tram', 'trolley', 'night'].includes(markerType) ? markerType : 'bus';
-    const options = {
-      iconSize: [width, height],
-      iconAnchor: [width / 2, width / 2],
-      popupAnchor: [0, -width / 2],
-      tooltipAnchor: [0, -width / 2 - 9],
-      rotationOrigin: [width / 2, width / 2].map((value) => `${value}px`).join(' '),
-      className: `vehicle-${markerTypeClass} ${inactiveClass}`.trim()
-    };
-    options.html = isActive
-      ? `${svgOpen}${circle}${triangle}${triangleOutline}${label}${svgClose}`
-      : `${svgOpen}${circle}${label}${svgClose}`;
-
-    return L.divIcon(options);
-  }
-
-  function vehicleMarkerRotation(vehicle) {
-    return Number(vehicle.speed) > MIN_ACTIVE_SPEED && vehicle._hasMoved
-      ? (Number.isFinite(vehicle.bearing) ? vehicle.bearing : 0)
-      : 0;
+    return L.divIcon({
+      className: 'vehicle-marker-wrap',
+      html: `<span class="vehicle-pin${inactiveClass}" style="--line-color:${escapeHTML(color)};--bearing:${bearing}deg"><span class="vehicle-label">${escapeHTML(label)}</span></span>`,
+      iconSize: [31, 34], iconAnchor: [15, 17], popupAnchor: [0, -15]
+    });
   }
 
   function displayInventoryNumber(value) {
@@ -2044,7 +2003,7 @@
       const displayCoords = vehicleDisplayCoords(vehicle);
       vehicle.displayCoords = displayCoords;
       if (!vehicle.marker) {
-        vehicle.marker = L.marker(displayCoords, { icon: vehicleIcon(vehicle), rotationAngle: vehicleMarkerRotation(vehicle), riseOnHover: true, keyboard: true, title: `Линия ${vehicle.routeRef || '—'} · инв. № ${vehicle.inventory || vehicle.id}` });
+        vehicle.marker = L.marker(displayCoords, { icon: vehicleIcon(vehicle), riseOnHover: true, keyboard: true, title: `Линия ${vehicle.routeRef || '—'} · инв. № ${vehicle.inventory || vehicle.id}` });
         const isNarrowViewport = (window.innerWidth || 1024) <= 480;
         const availableWidth = Math.max(220, (window.innerWidth || 1024) - 24);
         const availableHeight = Math.max(200, (window.innerHeight || 768) - 40);
@@ -2090,9 +2049,6 @@
           vehicle.marker.setIcon(vehicleIcon(vehicle));
           vehicle._iconSignature = signature;
         }
-        if (typeof vehicle.marker.setRotationAngle === 'function') {
-          vehicle.marker.setRotationAngle(vehicleMarkerRotation(vehicle));
-        }
         const popup = vehicle.marker.getPopup();
         if (vehicle.marker.isPopupOpen() && popup) {
           const content = vehiclePopup(vehicle);
@@ -2115,7 +2071,7 @@
 
   function vehicleIconSignature(vehicle) {
     const ageMinutes = Math.floor(Date.now() / 1000 - (vehicle.timestamp || 0)) / 60;
-    return [vehicle.routeRef, vehicle.type, getVehicleColor(vehicle), vehicle.bearing, vehicle._hasMoved ? 'active' : 'passive', ageMinutes >= 1 ? 'inactive' : 'fresh'].join('|');
+    return [vehicle.routeRef, vehicle.type, getVehicleColor(vehicle), vehicle.bearing, ageMinutes >= 1 ? 'inactive' : 'fresh'].join('|');
   }
 
   function clearSelectedVehicleRoute() {
