@@ -803,7 +803,7 @@ body.dark-theme {
   min-width: 34px;
   padding: 0 5px;
   border-radius: 10px;
-  font-size: 16px;
+  font-size: 13px;
 }
 .vehicle-pin::after {
   left: 15px;
