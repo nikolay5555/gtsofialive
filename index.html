@@ -10,11 +10,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-  <link rel="stylesheet" href="src/styles.css?v=gtsofia-sidebar-20261011-14">
+  <link rel="stylesheet" href="src/styles.css?v=gtsofia-mobile-map-popup-20261012-1">
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script defer src="src/config.js?v=gtfs-parity-20261010-13"></script>
   <script defer src="src/models.js?v=gtfs-parity-20261010"></script>
-  <script defer src="src/app.js?v=gtsofia-sidebar-20261011-14"></script>
+  <script defer src="src/app.js?v=gtsofia-mobile-map-popup-20261012-1"></script>
 </head>
 <body>
   <header class="topbar">
@@ -25,7 +25,7 @@
   <main class="workspace">
     <aside class="sidebar" aria-label="Филтри и превозни средства">
       <section class="filter-section">
-        <div class="section-title-row"><h2>Филтри</h2><button id="clear-filters" class="text-button" type="button">Изчисти</button></div>
+        <div class="section-title-row"><h2>Филтри</h2><div class="filter-actions"><button id="mobile-vehicles-toggle" class="mobile-vehicles-toggle" type="button" aria-controls="vehicle-list" aria-expanded="false">☷ <span>Списък</span> <strong id="mobile-list-count">0</strong></button><button id="clear-filters" class="text-button" type="button">Изчисти</button></div></div>
         <label class="search-field"><span class="search-icon" aria-hidden="true">⌕</span><input id="search-input" type="search" placeholder="Линия или инв. номер" autocomplete="off"></label>
         <div class="filter-control">
           <label class="field-label" id="line-filter-label" for="line-filter-trigger">Линия</label>

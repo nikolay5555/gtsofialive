@@ -896,3 +896,166 @@ body.dark-theme {
   }
   .map-locate-button { top: 10px !important; left: 10px !important; }
 }
+
+
+/* v6: map-first mobile layout, compact vehicle markers and an optional list sheet. */
+.filter-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
+.mobile-vehicles-toggle { display: none; }
+@media (max-width: 760px) {
+  body { overflow: hidden; }
+  .topbar { position: relative; z-index: 1000; height: 54px; min-height: 54px; padding: 0 14px; }
+  .workspace {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: calc(100dvh - 54px);
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  .map-area {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .sidebar {
+    position: absolute;
+    z-index: 700;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    margin: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    box-shadow: none;
+  }
+  .filter-section {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 9px;
+    row-gap: 7px;
+    padding: 9px 10px 10px;
+    border: 1px solid rgba(226, 232, 240, .95);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .95);
+    box-shadow: 0 6px 24px rgba(15, 23, 42, .12);
+    backdrop-filter: blur(14px);
+  }
+  .filter-section .section-title-row {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0;
+  }
+  .filter-section .section-title-row h2 { font-size: 12px; }
+  .filter-actions { gap: 9px; }
+  .mobile-vehicles-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 27px;
+    padding: 4px 7px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-soft);
+    color: var(--text-mid);
+    font-size: 11px;
+    font-weight: 750;
+    cursor: pointer;
+  }
+  .mobile-vehicles-toggle strong {
+    display: inline-grid;
+    place-items: center;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: 5px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-vehicles-toggle[aria-expanded="true"] { border-color: #94a3b8; background: #eaf0f7; }
+  .filter-section .search-field { grid-column: 1 / -1; height: 36px; min-height: 36px; }
+  .filter-section .search-field input { font-size: 12px; }
+  .filter-section .filter-control {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: 42px minmax(0, 1fr);
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+  .filter-section .filter-control .field-label { margin: 0; font-size: 10px; }
+  .filter-section .select-field { min-height: 33px; height: 33px; font-size: 12px; }
+  .filter-section .line-picker-trigger .line-identity.compact .line-identity-icon,
+  .filter-section .line-picker-trigger .line-identity.compact .line-identity-icon img { width: 22px; height: 22px; }
+  .filter-section .line-picker-trigger .line-identity.compact .line-identity-icon { flex-basis: 22px; }
+  .filter-section .line-picker-trigger .line-identity.compact .line-identity-pill { width: 36px; min-width: 30px; height: 22px; font-size: 11px; }
+  .vehicles-section { display: none; }
+  .workspace.mobile-list-open .sidebar { max-height: calc(100% - 16px); overflow: hidden; }
+  .workspace.mobile-list-open .vehicles-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: min(48dvh, 410px);
+    margin-top: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(226, 232, 240, .95);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .97);
+    box-shadow: 0 8px 28px rgba(15, 23, 42, .16);
+    backdrop-filter: blur(14px);
+  }
+  .workspace.mobile-list-open .vehicles-title-row { flex: 0 0 auto; padding: 10px 12px 7px; }
+  .workspace.mobile-list-open .vehicles-title-row h2 { font-size: 12px; }
+  .workspace.mobile-list-open .vehicles-title-row p { font-size: 10px; }
+  .workspace.mobile-list-open .unexpected-only-toggle { flex: 0 0 auto; padding: 0 12px 8px; font-size: 10px; }
+  .workspace.mobile-list-open .vehicle-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px 7px 8px; }
+  .workspace.mobile-list-open .vehicle-line-group-grid { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 5px; }
+  .workspace.mobile-list-open .vehicle-list-item { min-height: 30px; font-size: 11px; }
+  .map-locate-button { top: auto !important; right: 12px !important; bottom: 38px !important; left: auto !important; width: 36px; height: 36px; }
+  .map-toast { top: 8px; z-index: 650; }
+  .map-credit { bottom: 3px; left: 7px; font-size: 8px; }
+  .leaflet-control-zoom { margin-top: 12px !important; margin-left: 10px !important; }
+  .vehicle-pin { width: 30px; height: 30px; }
+  .vehicle-pin .vehicle-label {
+    height: 26px;
+    min-width: 26px;
+    padding: 0 3px;
+    border-width: 1.5px;
+    border-radius: 8px;
+    font-size: 11px;
+  }
+  .vehicle-pin::after { left: 11px; bottom: -1px; width: 8px; height: 8px; }
+}
+@media (max-width: 390px) {
+  .filter-section { column-gap: 7px; padding: 8px 9px 9px; }
+  .filter-actions { gap: 6px; }
+  .mobile-vehicles-toggle { padding: 4px 6px; font-size: 10px; }
+  .filter-section .search-field { height: 34px; min-height: 34px; }
+  .filter-section .select-field { min-height: 31px; height: 31px; font-size: 11px; }
+  .filter-section .filter-control { grid-template-columns: 38px minmax(0, 1fr); gap: 5px; }
+  .vehicle-pin .vehicle-label { height: 25px; min-width: 25px; font-size: 10px; }
+  .vehicle-pin::after { left: 10.5px; }
+}
+body.dark-theme .filter-section { border-color: rgba(55, 65, 81, .95); background: rgba(17, 24, 39, .95); }
+body.dark-theme .mobile-vehicles-toggle { border-color: #374151; background: #1f2937; color: #e5e7eb; }
+body.dark-theme .mobile-vehicles-toggle strong { background: #111827; color: #f9fafb; }
+body.dark-theme .mobile-vehicles-toggle[aria-expanded="true"] { border-color: #64748b; background: #263244; }
+body.dark-theme .workspace.mobile-list-open .vehicles-section { border-color: rgba(55, 65, 81, .95); background: rgba(17, 24, 39, .97); }
