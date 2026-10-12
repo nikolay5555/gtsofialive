@@ -504,6 +504,7 @@
       "type": "bus",
       "models": [
         {
+           "model": "models.bus.bmc_procity",
           "depot_id": "mtk",
           "is_bendy": false
         }
