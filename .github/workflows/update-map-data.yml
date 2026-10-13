@@ -1,4 +1,4 @@
-name: Обновяване на статичните данни на картата
+name: Update static map data
 
 on:
   workflow_dispatch:
@@ -12,26 +12,26 @@ concurrency:
 
 jobs:
   update-map-data:
-    name: Обновяване на маршрутите и геометриите
+    name: Update routes and geometries
     runs-on: ubuntu-latest
     steps:
-      - name: Изтегляне на хранилището
+      - name: Download the repository
         uses: actions/checkout@v7
 
-      - name: Настройка на Python
+      - name: Python setup
         uses: actions/setup-python@v7
         with:
           python-version: '3.13'
 
-      - name: Генериране и проверка на статичните данни
+      - name: Static data generation and verification
         run: python scripts/update-map-data.py
 
-      - name: Записване на промените в GitHub
+      - name: Commit changes to GitHub
         env:
           TARGET_BRANCH: ${{ github.ref_name }}
         run: |
           if git diff --quiet -- data/transport-map.json; then
-            echo "Няма промени в data/transport-map.json. Няма какво да се commit-не."
+            echo "There are no changes in data/transport-map.json. There is nothing to commit."
             exit 0
           fi
 
