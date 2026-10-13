@@ -10,7 +10,7 @@ on:
   # so deploy again after the manual data-update workflow completes.
   workflow_run:
     workflows:
-      - Обновяване на статичните данни на картата
+      - Update static map data
     types:
       - completed
 
