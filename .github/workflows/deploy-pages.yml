@@ -1,0 +1,58 @@
+name: Deploy GitHub Pages
+
+on:
+  # Publish ordinary changes pushed to main.
+  push:
+    branches:
+      - main
+
+  # GITHUB_TOKEN pushes do not start a push-triggered workflow,
+  # so deploy again after the manual data-update workflow completes.
+  workflow_run:
+    workflows:
+      - Обновяване на статичните данни на картата
+    types:
+      - completed
+
+  # Allow a manual deployment from the Actions tab.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
