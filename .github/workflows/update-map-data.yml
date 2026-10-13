@@ -1,0 +1,42 @@
+name: Обновяване на статичните данни на картата
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-map-data
+  cancel-in-progress: false
+
+jobs:
+  update-map-data:
+    name: Обновяване на маршрутите и геометриите
+    runs-on: ubuntu-latest
+    steps:
+      - name: Изтегляне на хранилището
+        uses: actions/checkout@v7
+
+      - name: Настройка на Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Генериране и проверка на статичните данни
+        run: python scripts/update-map-data.py
+
+      - name: Записване на промените в GitHub
+        env:
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: |
+          if git diff --quiet -- data/transport-map.json; then
+            echo "Няма промени в data/transport-map.json. Няма какво да се commit-не."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- data/transport-map.json
+          git commit -m "Update static map data"
+          git push origin "HEAD:${TARGET_BRANCH}"
