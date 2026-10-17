@@ -1,14 +1,13 @@
-/* Official Sofia Traffic GTFS-Realtime source. */
+/* GTFS-only live configuration, aligned with Dimitar5555/sofiatraffic-livemap. */
 window.GTSOFIA_LIVEMAP_CONFIG = {
   sources: {
     gtfs: {
-      label: 'ЦГМ · GTFS-Realtime',
-      // Official vehicle-position feed. The response is a GTFS-Realtime protobuf message.
-      url: 'https://gtfs.sofiatraffic.bg/api/v1/vehicle-positions'
+      label: 'ЦГМ · GTFS',
+      // This is the same v2 GTFS WebSocket endpoint used by the reference map.
+      url: 'wss://sofiatraffic-proxy.onrender.com/v2/livemap/'
     }
   },
-  // GTFS-Realtime positions are refreshed every few seconds by the source.
-  pollIntervalMs: 5_000,
+  // The reference route metadata is refreshed online, with data/route-catalog.json as fallback.
   routeCatalogUrl: 'https://raw.githubusercontent.com/Dimitar5555/sofiatraffic-schedules/master/data/routes.json',
   minActiveSpeed: 3,
   refreshStaleAfterMs: 120_000,
