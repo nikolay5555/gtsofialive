@@ -103,7 +103,6 @@
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: background .15s ease, transform .15s ease;
 }
 
 .websocket-notice-close:hover {
