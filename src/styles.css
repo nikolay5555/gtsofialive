@@ -1060,8 +1060,8 @@ body.dark-theme .mobile-vehicles-toggle strong { background: #111827; color: #f9
 body.dark-theme .mobile-vehicles-toggle[aria-expanded="true"] { border-color: #64748b; background: #263244; }
 body.dark-theme .workspace.mobile-list-open .vehicles-section { border-color: rgba(55, 65, 81, .95); background: rgba(17, 24, 39, .97); }
 
-
-/* Ръчно известие за временни проблеми с данните на живо. */
+/* Ръчно известие за временни проблеми с данните на живо.
+   За показване/скриване променяй атрибута hidden в index.html. */
 .service-notice {
   position: absolute;
   z-index: 650;
@@ -1116,3 +1116,4 @@ body.dark-theme .service-notice { border-color: #92400e; background: rgba(69, 26
   .service-notice-copy strong { font-size: 11px; }
   .service-notice-copy p { font-size: 10px; }
 }
+
