@@ -2043,7 +2043,7 @@
     });
     const workspace = document.querySelector('.workspace');
     const desktopSidebarToggle = $('desktop-sidebar-toggle');
-    const setDesktopSidebarOpen = (closed) => {
+    const setDesktopSidebarOpen = (open) => {
       workspace?.classList.toggle('sidebar-collapsed', !open);
       desktopSidebarToggle?.setAttribute('aria-expanded', String(open));
       const icon = desktopSidebarToggle?.querySelector('.map-sidebar-toggle-icon');
@@ -2059,6 +2059,9 @@
     desktopSidebarToggle?.addEventListener('click', () => {
       setDesktopSidebarOpen(workspace?.classList.contains('sidebar-collapsed'));
     });
+
+    // Sidebar-ът е collapsed по подразбиране
+    setDesktopSidebarOpen(false);
 
     const mobileVehiclesToggle = $('mobile-vehicles-toggle');
     const setMobileVehiclesOpen = (open) => {
