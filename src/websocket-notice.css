@@ -120,7 +120,7 @@
 
 @media (max-width: 480px) {
   .websocket-notice-backdrop { padding: 16px; }
-  .websocket-notice-dialog h1 { padding: 29px 21px 22px; border-radius: 19px; font-size: 15px; }
+  .websocket-notice-dialog h1 { padding: 29px 21px 22px; border-radius: 19px; font-size: 20px; }
   .websocket-notice-icon { width: 48px; height: 48px; margin-bottom: 14px; border-radius: 15px; }
 }
 
