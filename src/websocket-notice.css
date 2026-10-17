@@ -105,6 +105,10 @@
   cursor: pointer;
 }
 
+.websocket-notice-close:hover {
+  background: var(--accent-hover, #1f2937);
+}
+
 .websocket-notice-x:focus-visible,
 .websocket-notice-close:focus-visible {
   outline: 3px solid rgba(37, 99, 235, .4);
