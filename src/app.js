@@ -2043,7 +2043,7 @@
     });
     const workspace = document.querySelector('.workspace');
     const desktopSidebarToggle = $('desktop-sidebar-toggle');
-    const setDesktopSidebarOpen = (open) => {
+    const setDesktopSidebarOpen = (closed) => {
       workspace?.classList.toggle('sidebar-collapsed', !open);
       desktopSidebarToggle?.setAttribute('aria-expanded', String(open));
       const icon = desktopSidebarToggle?.querySelector('.map-sidebar-toggle-icon');
