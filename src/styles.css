@@ -1059,3 +1059,60 @@ body.dark-theme .mobile-vehicles-toggle { border-color: #374151; background: #1f
 body.dark-theme .mobile-vehicles-toggle strong { background: #111827; color: #f9fafb; }
 body.dark-theme .mobile-vehicles-toggle[aria-expanded="true"] { border-color: #64748b; background: #263244; }
 body.dark-theme .workspace.mobile-list-open .vehicles-section { border-color: rgba(55, 65, 81, .95); background: rgba(17, 24, 39, .97); }
+
+
+/* Ръчно известие за временни проблеми с данните на живо. */
+.service-notice {
+  position: absolute;
+  z-index: 650;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: max-content;
+  max-width: min(560px, calc(100% - 32px));
+  padding: 11px 14px;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  background: rgba(255, 251, 235, .97);
+  color: #78350f;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, .16);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+.service-notice[hidden] { display: none !important; }
+.service-notice-icon {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 23px;
+  border-radius: 50%;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+}
+.service-notice-copy { min-width: 0; }
+.service-notice-copy strong { display: block; margin: 1px 0 3px; font-size: 12px; font-weight: 800; }
+.service-notice-copy p { margin: 0; font-size: 11px; line-height: 1.4; }
+body.dark-theme .service-notice { border-color: #92400e; background: rgba(69, 26, 3, .97); color: #fef3c7; }
+@media (max-width: 760px) {
+  .service-notice {
+    top: auto;
+    right: 58px;
+    bottom: 52px;
+    left: 12px;
+    width: auto;
+    max-width: none;
+    transform: none;
+    gap: 8px;
+    padding: 9px 10px;
+    border-radius: 10px;
+  }
+  .service-notice-copy strong { font-size: 11px; }
+  .service-notice-copy p { font-size: 10px; }
+}

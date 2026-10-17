@@ -57,6 +57,14 @@
 
     <section class="map-area" aria-label="Карта на София">
       <div id="map" role="application" aria-label="Интерактивна карта на градския транспорт"></div>
+      <!-- РЪЧНО СЪОБЩЕНИЕ: махни атрибута hidden, за да го покажеш; върни го, за да го скриеш. -->
+      <div class="service-notice" role="status" aria-live="polite" hidden>
+        <span class="service-notice-icon" aria-hidden="true">!</span>
+        <div class="service-notice-copy">
+          <strong>Временно няма данни на живо</strong>
+          <p>Поради временни технически проблеми със сървъра/WebSocket превозните средства може временно да не се показват. Извиняваме се за неудобството!</p>
+        </div>
+      </div>
       <button id="locate-button" class="map-locate-button" type="button" title="Моето местоположение" aria-label="Моето местоположение"><img src="assets/icons/location.svg" alt="" aria-hidden="true"></button>
       <div class="map-toast" id="map-toast" role="status" aria-live="polite" hidden></div>
       <div class="map-credit">Картографски данни © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a></div>
