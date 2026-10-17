@@ -75,20 +75,13 @@
 }
 
 .websocket-notice-dialog h2 {
-  max-width: 360px;
-  margin: 0 auto 12px;
+  max-width: 380px;
+  margin: 0 auto 23px;
   font-size: clamp(20px, 4vw, 24px);
   font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: -.035em;
-}
-
-.websocket-notice-message {
-  margin: 0 auto 23px;
-  max-width: 380px;
-  color: var(--text-mid, #374151);
-  font-size: 14px;
   line-height: 1.6;
+  letter-spacing: -.035em;
+  color: var(--text-mid, #374151);
 }
 
 .websocket-notice-close {
