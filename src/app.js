@@ -1939,24 +1939,60 @@
     return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
   }
 
-  function scheduleSocketReconnect(generation, message) {
-    if (generation !== state.socketGeneration || state.reconnectTimer !== null) return;
-    setConnection('error', message || 'Ще опитаме повторно автоматично');
+  function scheduleLivePoll(generation, delay) {
+    clearTimeout(state.reconnectTimer);
     state.reconnectTimer = setTimeout(() => {
       state.reconnectTimer = null;
-      if (generation === state.socketGeneration) connectSocket();
-    }, RECONNECT_DELAY);
+      if (generation === state.socketGeneration) pollGTFSRealtime(generation);
+    }, delay);
+  }
+
+  async function pollGTFSRealtime(generation) {
+    if (generation !== state.socketGeneration) return;
+    const sourceConfig = CONFIG.sources?.gtfs;
+    if (!sourceConfig?.url) {
+      setConnection('error', 'Не е конфигуриран GTFS-Realtime API източник.');
+      return;
+    }
+
+    try {
+      const response = await fetch(sourceConfig.url, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Accept: 'application/x-protobuf, application/octet-stream, application/json' }
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      let payload;
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      if (contentType.includes('json')) {
+        payload = await response.json();
+      } else {
+        if (!window.GTSOFIA_GTFS_RT?.decode) throw new Error('Липсва GTFS-Realtime декодер.');
+        payload = window.GTSOFIA_GTFS_RT.decode(await response.arrayBuffer());
+        if (!Array.isArray(payload)) throw new Error('Невалиден GTFS-Realtime поток.');
+      }
+
+      if (generation !== state.socketGeneration) return;
+      receiveSnapshot(payload);
+      scheduleLivePoll(generation, Number(CONFIG.pollIntervalMs) || 5000);
+    } catch (error) {
+      if (generation !== state.socketGeneration) return;
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn('Неуспешно извличане на GTFS-Realtime позиции:', error);
+      setConnection('error', `GTFS-Realtime API не отговаря (${reason}). Ще опитаме отново.`);
+      scheduleLivePoll(generation, RECONNECT_DELAY);
+    }
   }
 
   function connectSocket() {
-    if (!window.WebSocket) {
-      setConnection('error', 'Браузърът не поддържа WebSocket.');
+    if (typeof window.fetch !== 'function') {
+      setConnection('error', 'Браузърът не поддържа fetch за GTFS-Realtime API.');
       return;
     }
-    // This app deliberately uses the same GTFS endpoint as the reference map.
     const sourceConfig = CONFIG.sources?.gtfs;
     if (!sourceConfig?.url) {
-      setConnection('error', 'Не е конфигуриран GTFS WebSocket източник.');
+      setConnection('error', 'Не е конфигуриран GTFS-Realtime API източник.');
       return;
     }
 
@@ -1971,35 +2007,8 @@
       previous.close();
       state.socket = null;
     }
-
-    setConnection('connecting', `Източник: ${sourceConfig.label}`);
-    try {
-      const socket = new WebSocket(sourceConfig.url);
-      state.socket = socket;
-      socket.onopen = () => {
-        if (generation !== state.socketGeneration) return;
-        setConnection('connected', `Връзка с ${sourceConfig.label} · изчакване на позиции`);
-      };
-      socket.onmessage = (event) => {
-        if (generation !== state.socketGeneration) return;
-        try {
-          receiveSnapshot(JSON.parse(event.data));
-        } catch (error) {
-          console.warn('Неразпознато GTFS live съобщение:', error);
-        }
-      };
-      socket.onerror = () => {
-        if (generation !== state.socketGeneration) return;
-        scheduleSocketReconnect(generation, 'Временно прекъсване на GTFS потока');
-      };
-      socket.onclose = () => {
-        if (generation !== state.socketGeneration) return;
-        scheduleSocketReconnect(generation, 'GTFS връзката прекъсна; ще опитаме повторно');
-      };
-    } catch (error) {
-      console.error('Неуспешна GTFS WebSocket връзка:', error);
-      scheduleSocketReconnect(generation, 'Неуспешна GTFS връзка. Повторен опит след малко.');
-    }
+    setConnection('connecting', `Източник: ${sourceConfig.label} · свързване към официалния поток`);
+    pollGTFSRealtime(generation);
   }
 
   function focusVehicle(id) {

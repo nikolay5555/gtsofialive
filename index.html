@@ -12,9 +12,10 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="src/styles.css?v=gtsofia-popup-redesign-20261012-2">
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script defer src="src/config.js?v=gtfs-parity-20261010-13"></script>
+  <script defer src="src/config.js?v=gtfs-rt-rest-20261017-1"></script>
   <script defer src="src/models.js?v=gtfs-parity-20261010"></script>
-  <script defer src="src/app.js?v=gtsofia-popup-redesign-20261012-2"></script>
+  <script defer src="src/gtfs-realtime.js?v=gtfs-rt-rest-20261017-1"></script>
+  <script defer src="src/app.js?v=gtfs-rt-rest-20261017-1"></script>
 </head>
 <body>
   <header class="topbar">
@@ -59,7 +60,7 @@
       <div id="map" role="application" aria-label="Интерактивна карта на градския транспорт"></div>
       <button id="locate-button" class="map-locate-button" type="button" title="Моето местоположение" aria-label="Моето местоположение"><img src="assets/icons/location.svg" alt="" aria-hidden="true"></button>
       <div class="map-toast" id="map-toast" role="status" aria-live="polite" hidden></div>
-      <div class="map-credit">Картографски данни © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a></div>
+      <div class="map-credit">Данни: <a href="https://sofiatraffic.bg/bg/info-center/danni" target="_blank" rel="noreferrer">ЦГМ / Sofia Traffic (CC BY 4.0)</a> · Карта © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a></div>
     </section>
   </main>
 </body>
