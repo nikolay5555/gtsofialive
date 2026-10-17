@@ -16,7 +16,7 @@
       aria-labelledby="websocket-notice-title" aria-describedby="websocket-notice-message">
       <button class="websocket-notice-x" type="button" aria-label="Затвори съобщението">&times;</button>
       <div class="websocket-notice-icon" aria-hidden="true">!</div>
-      <h1 id="websocket-notice-title">Поради проблем със сървъра превозните средства не се показват.</h1>
+      <h1 id="websocket-notice-title">Поради проблем със сървъра превозните средства не се визуализират.</h1>
       <button class="websocket-notice-close" type="button">Затвори</button>
     </section>
   `;
