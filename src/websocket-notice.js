@@ -16,9 +16,11 @@
       aria-labelledby="websocket-notice-title" aria-describedby="websocket-notice-message">
       <button class="websocket-notice-x" type="button" aria-label="Затвори съобщението">&times;</button>
       <div class="websocket-notice-icon" aria-hidden="true">!</div>
-      <h2 id="websocket-notice-title">Внимание!</h2>
+      <p class="websocket-notice-eyebrow">GTSOFIA · ИНФОРМАЦИЯ</p>
+      <h2 id="websocket-notice-title">Временен проблем с живите данни</h2>
       <p id="websocket-notice-message" class="websocket-notice-message">
-        Поради проблем с WebSocket сървъра превозните средства не се показват.
+        В момента има временен проблем с WebSocket сървъра и превозните средства може да не се показват на картата.
+        Извиняваме се за причиненото неудобство.
       </p>
       <button class="websocket-notice-close" type="button">Затвори</button>
     </section>

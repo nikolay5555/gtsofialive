@@ -2046,9 +2046,7 @@
     const setDesktopSidebarOpen = (open) => {
       workspace?.classList.toggle('sidebar-collapsed', !open);
       desktopSidebarToggle?.setAttribute('aria-expanded', String(open));
-      const label = desktopSidebarToggle?.querySelector('.map-sidebar-toggle-label');
       const icon = desktopSidebarToggle?.querySelector('.map-sidebar-toggle-icon');
-      if (label) label.textContent = open ? 'Скрий панела' : 'Покажи панела';
       if (icon) icon.textContent = open ? '◂' : '☰';
       if (desktopSidebarToggle) {
         const action = open ? 'Скрий' : 'Покажи';

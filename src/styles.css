@@ -1061,11 +1061,25 @@ body.dark-theme .mobile-vehicles-toggle[aria-expanded="true"] { border-color: #6
 body.dark-theme .workspace.mobile-list-open .vehicles-section { border-color: rgba(55, 65, 81, .95); background: rgba(17, 24, 39, .97); }
 
 
-/* Desktop: collapsible sidebar; when closed, the map expands into the full workspace. */
+/* Desktop: the map always uses the full workspace. The sidebar floats above it. */
 .map-sidebar-toggle { display: none; }
 @media (min-width: 761px) {
-  .workspace.sidebar-collapsed {
+  .workspace {
+    --floating-sidebar-width: 320px;
+    position: relative;
     grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace > .sidebar {
+    position: absolute;
+    z-index: 900;
+    top: 24px;
+    bottom: 24px;
+    left: 24px;
+    width: var(--floating-sidebar-width);
+    max-width: calc(100% - 48px);
+    height: auto;
+    min-height: 0;
+    margin: 0;
   }
   .workspace.sidebar-collapsed > .sidebar {
     display: none;
@@ -1078,19 +1092,23 @@ body.dark-theme .workspace.mobile-list-open .vehicles-section { border-color: rg
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    width: 36px;
+    height: 36px;
     min-height: 36px;
-    padding: 0 12px;
+    padding: 0;
     border: 1px solid rgba(229, 231, 235, .95);
     border-radius: 10px;
     color: var(--text-mid);
     background: rgba(255, 255, 255, .96);
     box-shadow: 0 4px 18px rgba(17, 24, 39, .12);
     backdrop-filter: blur(12px);
-    font-size: 12px;
-    font-weight: 700;
     cursor: pointer;
-    transition: background .15s ease, color .15s ease, transform .15s ease;
+    transition: left .18s ease, background .15s ease, color .15s ease, transform .15s ease;
+  }
+  /* When the floating panel is open, keep both map buttons outside its edge. */
+  .workspace:not(.sidebar-collapsed) .map-sidebar-toggle,
+  .workspace:not(.sidebar-collapsed) .map-locate-button {
+    left: calc(var(--floating-sidebar-width) + 20px) !important;
   }
   .map-sidebar-toggle:hover {
     color: var(--text);
@@ -1102,11 +1120,15 @@ body.dark-theme .workspace.mobile-list-open .vehicles-section { border-color: rg
     outline-offset: 2px;
   }
   .map-sidebar-toggle-icon {
-    font-size: 18px;
+    display: block;
+    font-size: 19px;
     line-height: 1;
   }
-  /* Keep the location button below the new sidebar button. */
+  /* Stack the location control beneath the icon-only sidebar button. */
   .map-locate-button { top: 60px !important; }
+  @media (max-width: 1050px) {
+    .workspace { --floating-sidebar-width: 280px; }
+  }
   body.dark-theme .map-sidebar-toggle {
     color: #e5e7eb;
     background: rgba(17, 24, 39, .96);
