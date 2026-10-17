@@ -77,7 +77,7 @@
 .websocket-notice-dialog h1 {
   max-width: 380px;
   margin: 0 auto 23px;
-  font-size: 15px;
+  font-size: 20px;
   font-weight: 800;
   line-height: 1.6;
   letter-spacing: -.035em;
@@ -120,9 +120,8 @@
 
 @media (max-width: 480px) {
   .websocket-notice-backdrop { padding: 16px; }
-  .websocket-notice-dialog { padding: 29px 21px 22px; border-radius: 19px; }
+  .websocket-notice-dialog { padding: 29px 21px 22px; border-radius: 19px; font-size: 13px; }
   .websocket-notice-icon { width: 48px; height: 48px; margin-bottom: 14px; border-radius: 15px; }
-  .websocket-notice-message { font-size: 13px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
