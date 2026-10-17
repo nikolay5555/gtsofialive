@@ -18,8 +18,7 @@
       <div class="websocket-notice-icon" aria-hidden="true">!</div>
       <h2 id="websocket-notice-title">Внимание!</h2>
       <p id="websocket-notice-message" class="websocket-notice-message">
-        В момента има временен проблем с WebSocket сървъра и превозните средства не се показват.
-        Извиняваме се за причиненото неудобство.
+        Поради проблем с WebSocket сървъра превозните средства не се показват.
       </p>
       <button class="websocket-notice-close" type="button">Затвори</button>
     </section>
