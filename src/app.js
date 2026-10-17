@@ -2042,6 +2042,26 @@
       renderVehicleList();
     });
     const workspace = document.querySelector('.workspace');
+    const desktopSidebarToggle = $('desktop-sidebar-toggle');
+    const setDesktopSidebarOpen = (open) => {
+      workspace?.classList.toggle('sidebar-collapsed', !open);
+      desktopSidebarToggle?.setAttribute('aria-expanded', String(open));
+      const label = desktopSidebarToggle?.querySelector('.map-sidebar-toggle-label');
+      const icon = desktopSidebarToggle?.querySelector('.map-sidebar-toggle-icon');
+      if (label) label.textContent = open ? 'Скрий панела' : 'Покажи панела';
+      if (icon) icon.textContent = open ? '◂' : '☰';
+      if (desktopSidebarToggle) {
+        const action = open ? 'Скрий' : 'Покажи';
+        desktopSidebarToggle.title = `${action} страничния панел`;
+        desktopSidebarToggle.setAttribute('aria-label', `${action} страничния панел`);
+      }
+      // Leaflet must recalculate its viewport after the map's grid column changes.
+      window.requestAnimationFrame(() => state.map?.invalidateSize({ pan: false }));
+    };
+    desktopSidebarToggle?.addEventListener('click', () => {
+      setDesktopSidebarOpen(workspace?.classList.contains('sidebar-collapsed'));
+    });
+
     const mobileVehiclesToggle = $('mobile-vehicles-toggle');
     const setMobileVehiclesOpen = (open) => {
       workspace?.classList.toggle('mobile-list-open', open);

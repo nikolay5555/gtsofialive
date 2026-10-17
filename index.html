@@ -10,11 +10,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-  <link rel="stylesheet" href="src/styles.css?v=gtsofia-popup-redesign-20261012-2">
+  <link rel="stylesheet" href="src/styles.css?v=20261017-sidebar-toggle-1">
+  <link rel="stylesheet" href="src/websocket-notice.css?v=20261017-1">
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script defer src="src/config.js?v=gtfs-parity-20261010-13"></script>
   <script defer src="src/models.js?v=gtfs-parity-20261010"></script>
-  <script defer src="src/app.js?v=gtsofia-popup-redesign-20261012-2"></script>
+  <script defer src="src/app.js?v=20261017-sidebar-toggle-1"></script>
+  <script defer src="src/websocket-notice.js?v=20261017-1"></script>
 </head>
 <body>
   <header class="topbar">
@@ -23,7 +25,7 @@
   </header>
 
   <main class="workspace">
-    <aside class="sidebar" aria-label="Филтри и превозни средства">
+    <aside id="map-sidebar" class="sidebar" aria-label="Филтри и превозни средства">
       <section class="filter-section">
         <div class="section-title-row"><h2>Филтри</h2><div class="filter-actions"><button id="mobile-vehicles-toggle" class="mobile-vehicles-toggle" type="button" aria-controls="vehicle-list" aria-expanded="false">☷ <span>Списък</span> <strong id="mobile-list-count">0</strong></button><button id="clear-filters" class="text-button" type="button">Изчисти</button></div></div>
         <label class="search-field"><span class="search-icon" aria-hidden="true">⌕</span><input id="search-input" type="search" placeholder="Линия или инв. номер" autocomplete="off"></label>
@@ -57,6 +59,10 @@
 
     <section class="map-area" aria-label="Карта на София">
       <div id="map" role="application" aria-label="Интерактивна карта на градския транспорт"></div>
+      <button id="desktop-sidebar-toggle" class="map-sidebar-toggle" type="button" title="Скрий страничния панел" aria-label="Скрий страничния панел" aria-controls="map-sidebar" aria-expanded="true">
+        <span class="map-sidebar-toggle-icon" aria-hidden="true">◂</span>
+        <span class="map-sidebar-toggle-label">Скрий панела</span>
+      </button>
       <button id="locate-button" class="map-locate-button" type="button" title="Моето местоположение" aria-label="Моето местоположение"><img src="assets/icons/location.svg" alt="" aria-hidden="true"></button>
       <div class="map-toast" id="map-toast" role="status" aria-live="polite" hidden></div>
       <div class="map-credit">Картографски данни © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a></div>

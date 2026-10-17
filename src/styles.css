@@ -1059,3 +1059,61 @@ body.dark-theme .mobile-vehicles-toggle { border-color: #374151; background: #1f
 body.dark-theme .mobile-vehicles-toggle strong { background: #111827; color: #f9fafb; }
 body.dark-theme .mobile-vehicles-toggle[aria-expanded="true"] { border-color: #64748b; background: #263244; }
 body.dark-theme .workspace.mobile-list-open .vehicles-section { border-color: rgba(55, 65, 81, .95); background: rgba(17, 24, 39, .97); }
+
+
+/* Desktop: collapsible sidebar; when closed, the map expands into the full workspace. */
+.map-sidebar-toggle { display: none; }
+@media (min-width: 761px) {
+  .workspace.sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace.sidebar-collapsed > .sidebar {
+    display: none;
+  }
+  .map-sidebar-toggle {
+    position: absolute;
+    z-index: 500;
+    top: 14px;
+    left: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid rgba(229, 231, 235, .95);
+    border-radius: 10px;
+    color: var(--text-mid);
+    background: rgba(255, 255, 255, .96);
+    box-shadow: 0 4px 18px rgba(17, 24, 39, .12);
+    backdrop-filter: blur(12px);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease, transform .15s ease;
+  }
+  .map-sidebar-toggle:hover {
+    color: var(--text);
+    background: #fff;
+    transform: translateY(-1px);
+  }
+  .map-sidebar-toggle:focus-visible {
+    outline: 3px solid rgba(59, 130, 246, .35);
+    outline-offset: 2px;
+  }
+  .map-sidebar-toggle-icon {
+    font-size: 18px;
+    line-height: 1;
+  }
+  /* Keep the location button below the new sidebar button. */
+  .map-locate-button { top: 60px !important; }
+  body.dark-theme .map-sidebar-toggle {
+    color: #e5e7eb;
+    background: rgba(17, 24, 39, .96);
+    border-color: rgba(55, 65, 81, .95);
+  }
+  body.dark-theme .map-sidebar-toggle:hover { background: #1f2937; }
+}
+@media (max-width: 760px) {
+  .map-sidebar-toggle { display: none !important; }
+}
