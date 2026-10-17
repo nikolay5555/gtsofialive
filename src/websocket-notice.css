@@ -74,7 +74,7 @@
   letter-spacing: .12em;
 }
 
-.websocket-notice-dialog h2 {
+.websocket-notice-dialog h1 {
   max-width: 380px;
   margin: 0 auto 23px;
   font-size: clamp(20px, 4vw, 24px);
