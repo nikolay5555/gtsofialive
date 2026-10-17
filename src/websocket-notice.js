@@ -6,7 +6,7 @@
 (() => {
   'use strict';
 
-  const WEBSOCKET_NOTICE_ENABLED = false;
+  const WEBSOCKET_NOTICE_ENABLED = true;
   if (!WEBSOCKET_NOTICE_ENABLED) return;
 
   const backdrop = document.createElement('div');
