@@ -1504,8 +1504,6 @@
 
     const count = $('result-count');
     if (count) count.textContent = String(vehicles.length);
-    const mobileCount = $('mobile-list-count');
-    if (mobileCount) mobileCount.textContent = String(vehicles.length);
 
     if (!vehicles.length) {
       const title = state.vehicles.size === 0
@@ -2050,51 +2048,40 @@
       renderVehicleList();
     });
     const workspace = document.querySelector('.workspace');
-    const desktopSidebarToggle = $('desktop-sidebar-toggle');
-    const setDesktopSidebarOpen = (open) => {
+    const sidebarToggle = $('map-sidebar-toggle');
+    const setSidebarOpen = (open) => {
       workspace?.classList.toggle('sidebar-collapsed', !open);
-      desktopSidebarToggle?.setAttribute('aria-expanded', String(open));
-      const icon = desktopSidebarToggle?.querySelector('.map-sidebar-toggle-icon');
+      sidebarToggle?.setAttribute('aria-expanded', String(open));
+      const icon = sidebarToggle?.querySelector('.map-sidebar-toggle-icon');
       if (icon) icon.textContent = open ? '◂' : '☰';
-      if (desktopSidebarToggle) {
+      if (sidebarToggle) {
         const action = open ? 'Скрий' : 'Покажи';
-        desktopSidebarToggle.title = `${action} страничния панел`;
-        desktopSidebarToggle.setAttribute('aria-label', `${action} страничния панел`);
+        sidebarToggle.title = `${action} страничния панел`;
+        sidebarToggle.setAttribute('aria-label', `${action} страничния панел`);
       }
-      // Leaflet must recalculate its viewport after the map's grid column changes.
+      // Let Leaflet recalculate its viewport after the sidebar changes state.
       window.requestAnimationFrame(() => state.map?.invalidateSize({ pan: false }));
     };
     const isMobileLayout = () => window.matchMedia('(max-width: 760px)').matches;
     let previousSidebarMobileMode = isMobileLayout();
-    // Keep the existing mobile filters visible on load, while retaining the
-    // desktop map-first behaviour where the sidebar starts collapsed.
-    setDesktopSidebarOpen(previousSidebarMobileMode);
+    // Keep the map clear on both mobile and desktop until the user opens the
+    // complete sidebar (filters and vehicles) with the persistent map button.
+    setSidebarOpen(false);
 
-    const mobileVehiclesToggle = $('mobile-vehicles-toggle');
-    const setMobileVehiclesOpen = (open) => {
-      workspace?.classList.toggle('mobile-list-open', open);
-      mobileVehiclesToggle?.setAttribute('aria-expanded', String(open));
-      if (mobileVehiclesToggle) mobileVehiclesToggle.title = open ? 'Скрий списъка с превозни средства' : 'Покажи списъка с превозни средства';
-    };
-    mobileVehiclesToggle?.addEventListener('click', () => {
-      setMobileVehiclesOpen(!workspace?.classList.contains('mobile-list-open'));
-    });
-    desktopSidebarToggle?.addEventListener('click', () => {
-      const open = workspace?.classList.contains('sidebar-collapsed');
-      setDesktopSidebarOpen(open);
-      if (!open) setMobileVehiclesOpen(false);
+    sidebarToggle?.addEventListener('click', () => {
+      setSidebarOpen(Boolean(workspace?.classList.contains('sidebar-collapsed')));
     });
     window.addEventListener('resize', () => {
       const mobileMode = isMobileLayout();
       if (mobileMode === previousSidebarMobileMode) return;
       previousSidebarMobileMode = mobileMode;
-      setDesktopSidebarOpen(mobileMode);
-      setMobileVehiclesOpen(false);
+      // Start collapsed when switching between phone and desktop layouts.
+      setSidebarOpen(false);
     });
     $('vehicle-list')?.addEventListener('click', (event) => {
       const row = event.target.closest('.vehicle-list-item');
       if (row?.dataset.vehicleId) {
-        setMobileVehiclesOpen(false);
+        if (isMobileLayout()) setSidebarOpen(false);
         focusVehicle(row.dataset.vehicleId);
       }
     });
@@ -2225,7 +2212,6 @@
       const mobileMarkerMode = (window.innerWidth || 1024) <= 760;
       if (mobileMarkerMode !== previousMobileMarkerMode) {
         previousMobileMarkerMode = mobileMarkerMode;
-        setMobileVehiclesOpen(false);
         updateVehicleMarkers();
       }
     });

@@ -898,9 +898,8 @@ body.dark-theme {
 }
 
 
-/* v6: map-first mobile layout, compact vehicle markers and an optional list sheet. */
+/* v6: map-first mobile layout with one toggle for the complete sidebar. */
 .filter-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
-.mobile-vehicles-toggle { display: none; }
 @media (max-width: 760px) {
   body { overflow: hidden; }
   .topbar { position: relative; z-index: 1000; height: 54px; min-height: 54px; padding: 0 14px; }
@@ -963,34 +962,6 @@ body.dark-theme {
   }
   .filter-section .section-title-row h2 { font-size: 12px; }
   .filter-actions { gap: 9px; }
-  .mobile-vehicles-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    min-height: 27px;
-    padding: 4px 7px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface-soft);
-    color: var(--text-mid);
-    font-size: 11px;
-    font-weight: 750;
-    cursor: pointer;
-  }
-  .mobile-vehicles-toggle strong {
-    display: inline-grid;
-    place-items: center;
-    min-width: 17px;
-    height: 17px;
-    padding: 0 4px;
-    border-radius: 5px;
-    background: var(--surface);
-    color: var(--text);
-    font-size: 10px;
-    font-variant-numeric: tabular-nums;
-  }
-  .mobile-vehicles-toggle[aria-expanded="true"] { border-color: #94a3b8; background: #eaf0f7; }
   .filter-section .search-field { grid-column: 1 / -1; height: 36px; min-height: 36px; }
   .filter-section .search-field input { font-size: 12px; }
   .filter-section .filter-control {
@@ -1007,11 +978,10 @@ body.dark-theme {
   .filter-section .line-picker-trigger .line-identity.compact .line-identity-icon img { width: 22px; height: 22px; }
   .filter-section .line-picker-trigger .line-identity.compact .line-identity-icon { flex-basis: 22px; }
   .filter-section .line-picker-trigger .line-identity.compact .line-identity-pill { width: 36px; min-width: 30px; height: 22px; font-size: 11px; }
-  .vehicles-section { display: none; }
-  .workspace.mobile-list-open .sidebar { max-height: calc(100% - 16px); overflow: hidden; }
-  .workspace.mobile-list-open .vehicles-section {
+  .vehicles-section {
     display: flex;
     flex-direction: column;
+    flex: 0 0 auto;
     min-height: 0;
     max-height: min(48dvh, 410px);
     margin-top: 8px;
@@ -1022,13 +992,13 @@ body.dark-theme {
     box-shadow: 0 8px 28px rgba(15, 23, 42, .16);
     backdrop-filter: blur(14px);
   }
-  .workspace.mobile-list-open .vehicles-title-row { flex: 0 0 auto; padding: 10px 12px 7px; }
-  .workspace.mobile-list-open .vehicles-title-row h2 { font-size: 12px; }
-  .workspace.mobile-list-open .vehicles-title-row p { font-size: 10px; }
-  .workspace.mobile-list-open .unexpected-only-toggle { flex: 0 0 auto; padding: 0 12px 8px; font-size: 10px; }
-  .workspace.mobile-list-open .vehicle-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px 7px 8px; }
-  .workspace.mobile-list-open .vehicle-line-group-grid { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 5px; }
-  .workspace.mobile-list-open .vehicle-list-item { min-height: 30px; font-size: 11px; }
+  .vehicles-title-row { flex: 0 0 auto; padding: 10px 12px 7px; }
+  .vehicles-title-row h2 { font-size: 12px; }
+  .vehicles-title-row p { font-size: 10px; }
+  .unexpected-only-toggle { flex: 0 0 auto; padding: 0 12px 8px; font-size: 10px; }
+  .vehicle-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px 7px 8px; }
+  .vehicle-line-group-grid { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 5px; }
+  .vehicle-list-item { min-height: 30px; font-size: 11px; }
   .map-locate-button { top: auto !important; right: 12px !important; bottom: 38px !important; left: auto !important; width: 36px; height: 36px; }
   .map-toast { top: 8px; z-index: 650; }
   .map-credit { bottom: 3px; left: 7px; font-size: 8px; }
@@ -1047,7 +1017,6 @@ body.dark-theme {
 @media (max-width: 390px) {
   .filter-section { column-gap: 7px; padding: 8px 9px 9px; }
   .filter-actions { gap: 6px; }
-  .mobile-vehicles-toggle { padding: 4px 6px; font-size: 10px; }
   .filter-section .search-field { height: 34px; min-height: 34px; }
   .filter-section .select-field { min-height: 31px; height: 31px; font-size: 11px; }
   .filter-section .filter-control { grid-template-columns: 38px minmax(0, 1fr); gap: 5px; }
@@ -1055,10 +1024,7 @@ body.dark-theme {
   .vehicle-pin::after { left: 10.5px; }
 }
 body.dark-theme .filter-section { border-color: rgba(55, 65, 81, .95); background: rgba(17, 24, 39, .95); }
-body.dark-theme .mobile-vehicles-toggle { border-color: #374151; background: #1f2937; color: #e5e7eb; }
-body.dark-theme .mobile-vehicles-toggle strong { background: #111827; color: #f9fafb; }
-body.dark-theme .mobile-vehicles-toggle[aria-expanded="true"] { border-color: #64748b; background: #263244; }
-body.dark-theme .workspace.mobile-list-open .vehicles-section { border-color: rgba(55, 65, 81, .95); background: rgba(17, 24, 39, .97); }
+body.dark-theme .vehicles-section { border-color: rgba(55, 65, 81, .95); background: rgba(17, 24, 39, .97); }
 
 
 /* Desktop: the map always uses the full workspace. The sidebar floats above it. */
@@ -1137,8 +1103,8 @@ body.dark-theme .workspace.mobile-list-open .vehicles-section { border-color: rg
   body.dark-theme .map-sidebar-toggle:hover { background: #1f2937; }
 }
 @media (max-width: 760px) {
-  /* Keep the same sidebar toggle available on phones. The open panel starts
-     below it so the control never covers the filters. */
+  /* Keep the same sidebar toggle available on phones. The complete panel
+     starts below it so the control never covers the filters. */
   .map-sidebar-toggle {
     position: absolute;
     z-index: 750;
@@ -1166,5 +1132,10 @@ body.dark-theme .workspace.mobile-list-open .vehicles-section { border-color: rg
   body.dark-theme .map-sidebar-toggle { color: #e5e7eb; background: rgba(17, 24, 39, .96); border-color: rgba(55, 65, 81, .95); }
   body.dark-theme .map-sidebar-toggle:hover { background: #1f2937; }
   .workspace.sidebar-collapsed > .sidebar { display: none; }
-  .workspace:not(.sidebar-collapsed) > .sidebar { top: 52px; }
+  .workspace:not(.sidebar-collapsed) > .sidebar {
+    top: 52px;
+    max-height: calc(100% - 60px);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
 }
