@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Build a compact live-map dataset from GTSofia's data/transport.json.
+"""Build a compact live-map dataset from GTSofia's modular data files.
 
 Usage:
-  python scripts/make-map-data.py /path/to/gtsofia/data/transport.json
+  python scripts/make-map-data.py /path/to/gtsofia/data
+  python scripts/make-map-data.py /path/to/gtsofia/data/transport.json  # legacy
 
-The map needs routes, stops, direction patterns, and route geometry only. Schedule
-and trip tables are omitted. Shape geometry is simplified with a small 8 m
-Douglas-Peucker tolerance to keep the GitHub Pages payload quick to download.
+The map needs metadata, routes, stops, direction patterns, and route geometry
+only. Schedule, trip and calendar tables are omitted. Shape geometry is
+simplified with an 8 m Douglas-Peucker tolerance for GitHub Pages.
 """
 import argparse
 import json
@@ -68,9 +69,71 @@ def simplify_shape(points: list[dict[str, Any]], tolerance_m: float = 8.0) -> li
     ]
 
 
+MODULAR_SOURCE_FILES = {
+    "metadata": "metadata.json",
+    "routes": "routes.json",
+    "stops": "stops.json",
+    "directions": "directions.json",
+    "shapes": "shapes.json",
+}
+
+
+def _load_json(path: Path) -> Any:
+    try:
+        with path.open(encoding="utf-8") as stream:
+            return json.load(stream)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Не може да се прочете {path}: {exc}") from exc
+
+
+def load_source(input_path: Path) -> dict[str, Any]:
+    """Load either the modular GTSofia data directory or a legacy monolith."""
+    input_path = input_path.expanduser().resolve()
+
+    if input_path.is_file() and input_path.name == "metadata.json":
+        return load_source(input_path.parent)
+
+    if input_path.is_dir():
+        candidates = [input_path, input_path / "data"]
+        data_dir = next(
+            (
+                candidate for candidate in candidates
+                if all((candidate / filename).is_file()
+                       for filename in MODULAR_SOURCE_FILES.values())
+            ),
+            None,
+        )
+        if data_dir is None:
+            expected = ", ".join(MODULAR_SOURCE_FILES.values())
+            raise RuntimeError(
+                f"Не са намерени модулните данни в {input_path}. "
+                f"Очакват се файловете: {expected}."
+            )
+
+        source = _load_json(data_dir / MODULAR_SOURCE_FILES["metadata"])
+        if not isinstance(source, dict):
+            raise RuntimeError("metadata.json трябва да съдържа JSON обект.")
+        source = dict(source)
+        for key, filename in MODULAR_SOURCE_FILES.items():
+            if key == "metadata":
+                continue
+            source[key] = _load_json(data_dir / filename)
+        return source
+
+    if input_path.is_file():
+        source = _load_json(input_path)
+        if not isinstance(source, dict) or not isinstance(source.get("routes"), list):
+            raise RuntimeError(
+                f"{input_path} не е съвместим transport.json и не е metadata.json "
+                "от директория с модулни данни."
+            )
+        return source
+
+    raise RuntimeError(f"Източникът не е намерен: {input_path}")
+
+
 def build(input_path: Path, output_path: Path, tolerance_m: float = 8.0) -> None:
-    with input_path.open(encoding="utf-8") as stream:
-        source = json.load(stream)
+    source = load_source(input_path)
 
     routes = [
         {
@@ -140,7 +203,10 @@ def build(input_path: Path, output_path: Path, tolerance_m: float = 8.0) -> None
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", type=Path, help="Път до data/transport.json от проекта GTSofia")
+    parser.add_argument(
+        "input", type=Path,
+        help="директория data/ от GTSofia, коренът на проекта или стар transport.json",
+    )
     parser.add_argument("--output", type=Path, default=Path("data/transport-map.json"), help="Изходен JSON файл")
     parser.add_argument("--tolerance-m", type=float, default=8.0, help="Допуск за опростяване на геометрията в метри (по подразбиране 8)")
     args = parser.parse_args()

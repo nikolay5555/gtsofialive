@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Refresh GTSOFIA Live's compact map data from the main GTSofia project.
 
-Default usage (download latest published source data):
+Default usage (download latest published modular source data):
     python scripts/update-map-data.py
 
-Use a locally generated data/transport.json instead:
-    python scripts/update-map-data.py --source ../gtsofia-main/data/transport.json
+Use a local GTSofia data directory instead:
+    python scripts/update-map-data.py --source ../gtsofia-main/data
 
-The updater writes only data/transport-map.json. It does not create a
-scheduled GitHub Action and does not edit the route/stop catalogs or local
-configuration files.
+A legacy data/transport.json file is still accepted as --source. The updater
+writes only data/transport-map.json; it does not edit catalogs or local rules.
 """
 
 import argparse
@@ -23,9 +22,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-DEFAULT_SOURCE_URL = (
-    "https://raw.githubusercontent.com/nikolay5555/gtsofia/main/data/transport.json"
-)
+DEFAULT_SOURCE_URL = "https://raw.githubusercontent.com/nikolay5555/gtsofia/main/data"
+SOURCE_FILES = ("metadata.json", "routes.json", "stops.json", "directions.json", "shapes.json")
 USER_AGENT = "GTSOFIA-Live-Map-Updater/1.0"
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -52,7 +50,7 @@ def load_builder():
     return module
 
 
-def download_source(url: str, destination: Path) -> None:
+def _download_file(url: str, destination: Path) -> None:
     request = urllib.request.Request(
         url,
         headers={
@@ -60,7 +58,7 @@ def download_source(url: str, destination: Path) -> None:
             "Accept": "application/json",
         },
     )
-    print(f"Изтеглям статичните данни от: {url}")
+    print(f"Изтеглям: {url}")
     try:
         with urllib.request.urlopen(request, timeout=120) as response:
             if response.status != 200:
@@ -73,12 +71,35 @@ def download_source(url: str, destination: Path) -> None:
                     output.write(chunk)
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise RuntimeError(
-            "Не успях да изтегля изходните данни. Провери интернет връзката "
-            "или подай локален файл чрез --source. Подробности: " + str(exc)
+            f"Не успях да изтегля {url}. Провери интернет връзката "
+            "или подай локален източник чрез --source. Подробности: " + str(exc)
         ) from exc
     if destination.stat().st_size == 0:
-        raise RuntimeError("Изтегленият файл е празен; текущите данни няма да бъдат променени.")
-    print(f"Изтеглен файл: {destination.stat().st_size / 1024 / 1024:.2f} MB")
+        raise RuntimeError(f"Изтегленият файл е празен: {url}; текущите данни няма да бъдат променени.")
+    print(f"  {destination.name}: {destination.stat().st_size / 1024 / 1024:.2f} MB")
+
+
+def download_source(url: str, destination: Path) -> Path:
+    """Download the five map inputs from a data directory URL.
+
+    A URL ending in ``transport.json`` is treated as a legacy single-file
+    source. Otherwise the URL is a base directory (or metadata.json URL) and
+    the map-relevant files are downloaded individually.
+    """
+    destination.mkdir(parents=True, exist_ok=True)
+    normalized_url = url.rstrip("/")
+    if normalized_url.endswith("/transport.json") or normalized_url.endswith("transport.json"):
+        target = destination / "transport.json"
+        _download_file(normalized_url, target)
+        return target
+
+    base_url = normalized_url
+    if base_url.endswith(".json"):
+        base_url = base_url.rsplit("/", 1)[0]
+
+    for filename in SOURCE_FILES:
+        _download_file(f"{base_url}/{filename}", destination / filename)
+    return destination
 
 
 def parse_updated_at(value: Any) -> date | None:
@@ -145,11 +166,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--source", type=Path,
-        help="локален data/transport.json от проекта GTSofia; при липса се изтегля файлът от GitHub",
+        help="локална директория с модулните JSON файлове, корен на GTSofia или стар transport.json",
     )
     parser.add_argument(
         "--source-url", default=DEFAULT_SOURCE_URL,
-        help="URL на публикувания data/transport.json (използва се, ако --source не е зададен)",
+        help="URL към директорията с модулните JSON файлове или URL към стар transport.json",
     )
     parser.add_argument(
         "--output", type=Path, default=DEFAULT_OUTPUT,
@@ -176,13 +197,12 @@ def main() -> int:
     try:
         if args.source:
             source_path = args.source.expanduser().resolve()
-            if not source_path.is_file():
-                raise RuntimeError(f"Локалният изходен файл не е намерен: {source_path}")
+            if not source_path.exists():
+                raise RuntimeError(f"Локалният източник не е намерен: {source_path}")
             print(f"Използвам локални данни: {source_path}")
         else:
             temporary_source_dir = tempfile.TemporaryDirectory(prefix="gts-live-source-")
-            source_path = Path(temporary_source_dir.name) / "transport.json"
-            download_source(args.source_url, source_path)
+            source_path = download_source(args.source_url, Path(temporary_source_dir.name))
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         fd, candidate_name = tempfile.mkstemp(
