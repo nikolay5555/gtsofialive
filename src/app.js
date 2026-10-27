@@ -852,9 +852,9 @@
   }
 
   function installVehiclePopupStyles() {
-    if (document.getElementById('gtsofia-popup-v13')) return;
+    if (document.getElementById('gtsofia-popup-v14')) return;
     const style = document.createElement('style');
-    style.id = 'gtsofia-popup-v13';
+    style.id = 'gtsofia-popup-v14';
     style.textContent = `
       /* v13 — route identity + destination + one quiet metadata rail (no nested cards). */
       .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper {
@@ -954,6 +954,14 @@
       .gts-vehicle-leaflet-popup .vehicle-popup-metadata-item .vehicle-popup-inline-icon {
         display: inline-flex; align-items: center; justify-content: center; flex: 0 0 13px; width: 13px;
         color: #738198; font-size: 13px; font-weight: 900; line-height: 1;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-metadata-item .vehicle-popup-speed-icon {
+        flex-basis: 15px; width: 15px;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-speed-icon svg {
+        display: block; width: 15px; height: 15px; overflow: visible;
+        fill: none; stroke: currentColor; stroke-width: 1.8;
+        stroke-linecap: round; stroke-linejoin: round;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-metadata-item strong {
         display: block; min-width: 0; max-width: 165px; color: #344054; font-size: 10px; font-weight: 750;
@@ -1422,7 +1430,7 @@
           <span class="vehicle-popup-inline-icon" aria-hidden="true">▤</span><strong>${escapeHTML(model)}</strong>
         </div>` : ''}
         ${speed ? `<div class="vehicle-popup-metadata-item speed" title="Скорост" aria-label="Скорост ${escapeHTML(speed)}">
-          <span class="vehicle-popup-inline-icon" aria-hidden="true">↗</span><strong>${escapeHTML(speed)}</strong>
+          <span class="vehicle-popup-inline-icon vehicle-popup-speed-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3.8 18.2a9.5 9.5 0 1 1 16.4 0"/><path d="M12 13l4.2-4.2"/><circle cx="12" cy="13" r="1.2"/></svg></span><strong>${escapeHTML(speed)}</strong>
         </div>` : ''}
       </div>` : ''}
     </div>`;
@@ -2056,12 +2064,11 @@
       // Leaflet must recalculate its viewport after the map's grid column changes.
       window.requestAnimationFrame(() => state.map?.invalidateSize({ pan: false }));
     };
-    desktopSidebarToggle?.addEventListener('click', () => {
-      setDesktopSidebarOpen(workspace?.classList.contains('sidebar-collapsed'));
-    });
-
-    // Sidebar-ът е collapsed по подразбиране
-    setDesktopSidebarOpen(false);
+    const isMobileLayout = () => window.matchMedia('(max-width: 760px)').matches;
+    let previousSidebarMobileMode = isMobileLayout();
+    // Keep the existing mobile filters visible on load, while retaining the
+    // desktop map-first behaviour where the sidebar starts collapsed.
+    setDesktopSidebarOpen(previousSidebarMobileMode);
 
     const mobileVehiclesToggle = $('mobile-vehicles-toggle');
     const setMobileVehiclesOpen = (open) => {
@@ -2071,6 +2078,18 @@
     };
     mobileVehiclesToggle?.addEventListener('click', () => {
       setMobileVehiclesOpen(!workspace?.classList.contains('mobile-list-open'));
+    });
+    desktopSidebarToggle?.addEventListener('click', () => {
+      const open = workspace?.classList.contains('sidebar-collapsed');
+      setDesktopSidebarOpen(open);
+      if (!open) setMobileVehiclesOpen(false);
+    });
+    window.addEventListener('resize', () => {
+      const mobileMode = isMobileLayout();
+      if (mobileMode === previousSidebarMobileMode) return;
+      previousSidebarMobileMode = mobileMode;
+      setDesktopSidebarOpen(mobileMode);
+      setMobileVehiclesOpen(false);
     });
     $('vehicle-list')?.addEventListener('click', (event) => {
       const row = event.target.closest('.vehicle-list-item');

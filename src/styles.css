@@ -1137,5 +1137,34 @@ body.dark-theme .workspace.mobile-list-open .vehicles-section { border-color: rg
   body.dark-theme .map-sidebar-toggle:hover { background: #1f2937; }
 }
 @media (max-width: 760px) {
-  .map-sidebar-toggle { display: none !important; }
+  /* Keep the same sidebar toggle available on phones. The open panel starts
+     below it so the control never covers the filters. */
+  .map-sidebar-toggle {
+    position: absolute;
+    z-index: 750;
+    top: 8px;
+    right: auto;
+    left: 8px !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+    border: 1px solid rgba(229, 231, 235, .95);
+    border-radius: 10px;
+    color: var(--text-mid);
+    background: rgba(255, 255, 255, .96);
+    box-shadow: 0 4px 18px rgba(17, 24, 39, .12);
+    backdrop-filter: blur(12px);
+    cursor: pointer;
+  }
+  .map-sidebar-toggle-icon { display: block; font-size: 19px; line-height: 1; }
+  .map-sidebar-toggle:hover { background: #fff; color: var(--text); }
+  .map-sidebar-toggle:focus-visible { outline: 3px solid rgba(59, 130, 246, .35); outline-offset: 2px; }
+  body.dark-theme .map-sidebar-toggle { color: #e5e7eb; background: rgba(17, 24, 39, .96); border-color: rgba(55, 65, 81, .95); }
+  body.dark-theme .map-sidebar-toggle:hover { background: #1f2937; }
+  .workspace.sidebar-collapsed > .sidebar { display: none; }
+  .workspace:not(.sidebar-collapsed) > .sidebar { top: 52px; }
 }
