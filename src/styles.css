@@ -1139,3 +1139,62 @@ body.dark-theme .vehicles-section { border-color: rgba(55, 65, 81, .95); backgro
     overflow-y: auto;
   }
 }
+
+/* v7: unified mobile sidebar card for filters + live vehicles, with an
+   elevated line picker so its option menu never sits behind the vehicle list. */
+@media (max-width: 760px) {
+  .workspace:not(.sidebar-collapsed) > .sidebar {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(226, 232, 240, .95);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .97);
+    box-shadow: 0 8px 28px rgba(15, 23, 42, .16);
+    backdrop-filter: blur(14px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .workspace:not(.sidebar-collapsed) > .sidebar .filter-section {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  .workspace:not(.sidebar-collapsed) > .sidebar .line-picker {
+    position: relative;
+    z-index: 10;
+  }
+  .workspace:not(.sidebar-collapsed) > .sidebar .line-picker-menu {
+    z-index: 20;
+  }
+  .workspace:not(.sidebar-collapsed) > .sidebar .vehicles-section {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    margin-top: 0;
+    border: 0;
+    border-top: 1px solid rgba(226, 232, 240, .95);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  body.dark-theme .workspace:not(.sidebar-collapsed) > .sidebar {
+    border-color: rgba(55, 65, 81, .95);
+    background: rgba(17, 24, 39, .97);
+  }
+  body.dark-theme .workspace:not(.sidebar-collapsed) > .sidebar .filter-section,
+  body.dark-theme .workspace:not(.sidebar-collapsed) > .sidebar .vehicles-section {
+    background: transparent;
+  }
+  body.dark-theme .workspace:not(.sidebar-collapsed) > .sidebar .vehicles-section {
+    border-top-color: rgba(55, 65, 81, .95);
+  }
+}
