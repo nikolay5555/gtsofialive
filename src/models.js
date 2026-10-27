@@ -244,7 +244,7 @@ const models = {
             id: 'higer_12m',
             name: "Higer KLQ6125GEV3",
             inv_number_ranges: [
-                [1701, 1703, 1705],
+                [1701, 1703],
                 [5001, 5099]
             ],
             extras: ['ac', 'low_floor']
