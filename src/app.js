@@ -116,20 +116,26 @@
   function routeColor(route, ref, type) {
     const routeId = String(route?.route_id ?? '');
     const override = getOverride(routeId) || state.overridesByRouteRef?.get(normaliseRef(ref));
-    if (String(ref || '').toUpperCase().startsWith('N')) return '#000000';
-    if (override?.color) return String(override.color).startsWith('#') ? String(override.color) : `#${override.color}`;
     const metroColor = METRO_LINE_COLORS[normaliseRef(ref)];
-    if (normaliseTransportType(type) === 'metro' && metroColor) return metroColor;
-    // Match the line-color rules used by GTSofia: when an override masks the
-    // source mode (for example, a temporary bus replacing a trolley), use the
-    // displayed mode's color instead of the original GTFS color.
-    if (!override?.type && route?.route_color) {
-      const source = String(route.route_color).trim();
-      if (/^[0-9a-f]{6}$/i.test(source)) return `#${source}`;
-      if (/^#[0-9a-f]{6}$/i.test(source)) return source;
-    }
+    const normalizedType = normaliseTransportType(type);
+
+    // Keep line pills, vehicle markers and route polylines on the same palette
+    // as GTSofia. A bus normalized from GTFS route_type=11 must not inherit
+    // the source trolley blue route_color from the feed.
+    const resolvedColor = window.GTSOFIA_ROUTE_TYPE_UTILS?.determineRouteColor(
+      ref,
+      normalizedType,
+      route?.route_color,
+      override?.color,
+      metroColor
+    );
+    if (resolvedColor) return resolvedColor;
+
+    if (override?.color) return String(override.color).startsWith('#') ? String(override.color) : `#${override.color}`;
+    if (normaliseRef(ref).startsWith('N')) return '#000000';
+    if (normalizedType === 'metro' && metroColor) return metroColor;
     const palette = { bus: '#BE1E2D', tram: '#F7941D', trolley: '#27AAE1', metro: '#1C75BC', other: '#111827' };
-    return palette[type] || palette.other;
+    return palette[normalizedType] || palette.other;
   }
 
   function routeForVehicleColor(vehicle) {

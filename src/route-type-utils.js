@@ -66,8 +66,44 @@
         return type;
     }
 
+    function normalizeColor(value) {
+        let color = String(value ?? '').trim();
+        if (!color) return '';
+        if (!color.startsWith('#')) color = `#${color}`;
+        return /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(color) ? color.toUpperCase() : '';
+    }
+
+    function determineRouteColor(routeRef, routeType, sourceColor, overrideColor, metroColor) {
+        const type = String(routeType ?? 'other').trim().toLowerCase();
+        const palette = Object.freeze({
+            bus: '#BE1E2D',
+            tram: '#F7941D',
+            trolley: '#27AAE1',
+            metro: '#1C75BC',
+            other: '#111827'
+        });
+
+        // Match GTSofia's route-metadata.js: an explicit configured override
+        // wins; otherwise only metro and night routes use GTFS route_color.
+        const configuredColor = normalizeColor(overrideColor);
+        if (configuredColor) return configuredColor;
+
+        const normalizedRef = normalizeRouteRef(routeRef);
+        const feedColor = normalizeColor(sourceColor);
+        if (normalizedRef.startsWith('N')) return feedColor || '#000000';
+
+        if (type === 'metro') {
+            return normalizeColor(metroColor) || feedColor || palette.metro;
+        }
+
+        // In particular, do not carry the original blue GTFS trolley color
+        // over to a replacement bus after determineRouteType() normalizes it.
+        return palette[type] || palette.other;
+    }
+
     return Object.freeze({
         normalizeRouteRef,
-        determineRouteType
+        determineRouteType,
+        determineRouteColor
     });
 });
