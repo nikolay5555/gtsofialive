@@ -11,7 +11,6 @@
   const TYPE_NAMES = { bus: 'Автобус', tram: 'Трамвай', trolley: 'Тролей', metro: 'Метро', other: 'Транспорт' };
   const TYPE_COLORS = { bus: '#BE1E2D', tram: '#F7941D', trolley: '#27AAE1', metro: '#1C75BC', other: '#111827' };
   const METRO_LINE_COLORS = { M1: '#EB2227', M2: '#1C75BC', M3: '#39B54A', M4: '#FFDE17' };
-  const FAKE_TROLLEY_ROUTES = new Set(['60', '73', '74', '123', '288', '801']);
 
   const state = {
     map: null,
@@ -77,7 +76,8 @@
   const getOverride = (routeId) => state.overridesByCgmId.get(String(routeId ?? '')) || null;
 
   function normaliseRef(value) {
-    return String(value ?? '').trim().replace(/\s+/g, '').toUpperCase();
+    const ref = String(value ?? '').trim().replace(/\s+/g, '').toUpperCase();
+    return window.GTSOFIA_ROUTE_TYPE_UTILS?.normalizeRouteRef(ref) || ref;
   }
 
   function routeType(route) {
@@ -86,6 +86,10 @@
     const shortName = String(route.route_short_name ?? '');
     const override = getOverride(routeId) || state.overridesByRouteRef?.get(normaliseRef(shortName));
     if (override?.type) return String(override.type).toLowerCase() === 'trolleybus' ? 'trolley' : String(override.type).toLowerCase();
+    const ref = routeRef(route) || shortName;
+    const normalizedType = window.GTSOFIA_ROUTE_TYPE_UTILS?.determineRouteType(ref, route.route_type);
+    if (normalizedType) return normalizedType;
+
     switch (String(route.route_type)) {
       case '0': return 'tram';
       case '1': return 'metro';
@@ -98,11 +102,14 @@
   function routeRef(route) {
     if (!route) return '';
     const override = getOverride(route.route_id) || state.overridesByRouteRef?.get(normaliseRef(route.route_short_name));
-    let ref = String(override?.route_ref || route.route_short_name || '').trim();
+    const ref = String(override?.route_ref || route.route_short_name || '').trim();
+    const normalizedRef = window.GTSOFIA_ROUTE_TYPE_UTILS?.normalizeRouteRef(ref);
+    if (normalizedRef) return normalizedRef;
+
     const number = ref.replace(/[a-zа-я]/gi, '');
-    if (/^E/i.test(ref)) ref = number;
-    else if (/^N/i.test(ref)) ref = `N${number}`;
-    else if (/^Y/i.test(ref)) ref = `У${number}`;
+    if (/^E/i.test(ref)) return number;
+    if (/^N/i.test(ref)) return `N${number}`;
+    if (/^Y/i.test(ref)) return `У${number}`;
     return ref;
   }
 
@@ -191,7 +198,12 @@
     const inventory = firstClean(vehicle.inv_number, vehicle.inventory_number,
       vehicle.inventoryNumber, vehicle.full_inv_number, vehicle.fullInventoryNumber);
     const inventoryNumber = Number.parseInt(inventory.split(/[+/]/)[0], 10);
-    if (type === 'trolley' && (FAKE_TROLLEY_ROUTES.has(normaliseRef(ref)) ||
+    const routeOverride = getOverride(firstClean(vehicle.cgm_route_id, vehicle.cgmRouteId,
+      vehicle.route_id, vehicle.routeId)) || state.overridesByRouteRef?.get(normaliseRef(ref));
+    const hasExplicitTypeOverride = ['bus', 'tram', 'trolley', 'trolleybus', 'metro']
+      .includes(cleanValue(routeOverride?.type).toLowerCase());
+    const normalizedRouteType = window.GTSOFIA_ROUTE_TYPE_UTILS?.determineRouteType(ref, '11');
+    if (type === 'trolley' && !hasExplicitTypeOverride && (normalizedRouteType === 'bus' ||
         (Number.isFinite(inventoryNumber) && inventoryNumber >= 5000 && inventoryNumber < 6000))) {
       vehicle.type = 'bus';
     }
@@ -280,7 +292,9 @@
 
     // Timetable route labels ending in TM/TБ are special bus labels (e.g. 3ТМ).
     if (type !== 'tram' && /(TM|ТМ|TB|ТБ)$/i.test(refUpper)) type = 'bus';
-    if (type === 'trolley' && (FAKE_TROLLEY_ROUTES.has(refUpper) || (Number.isFinite(inventoryNumber) && inventoryNumber >= 5000 && inventoryNumber < 6000))) type = 'bus';
+    const normalizedRouteType = window.GTSOFIA_ROUTE_TYPE_UTILS?.determineRouteType(ref, '11');
+    if (type === 'trolley' && !overrideType && (normalizedRouteType === 'bus' ||
+        (Number.isFinite(inventoryNumber) && inventoryNumber >= 5000 && inventoryNumber < 6000))) type = 'bus';
     return ['bus', 'tram', 'trolley', 'metro'].includes(type) ? type : 'other';
   }
 
