@@ -1547,30 +1547,36 @@
     const isUnexpected = !isVehicleExpectedOnLine(vehicle);
     const hasDestination = destination && destination !== 'Няма данни за дестинацията';
     const hasNextStop = nextStop && nextStop !== 'Няма данни за следваща спирка';
-    return `<div class="vehicle-popup-card">
-      <div class="vehicle-popup-card-head">
-        <div class="vehicle-popup-route">${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}</div>
-        <div class="vehicle-popup-inventory-group">
-          <div class="vehicle-popup-inventory" title="Инвентарен номер" aria-label="Инвентарен номер ${escapeHTML(inventory)}"><strong>${escapeHTML(inventory)}</strong></div>
-          ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">⚠</button>` : ''}
+
+    // Popup v4: a compact transit pass layout built from a clean semantic structure.
+    // No visible field labels or nested mini-cards; only the existing values and icons remain.
+    return `<article class="vehicle-popup-v4">
+      <header class="vp4-header">
+        <div class="vp4-route">${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}</div>
+        <div class="vp4-header-meta">
+          <span class="vp4-inventory" title="Инвентарен номер" aria-label="Инвентарен номер ${escapeHTML(inventory)}">${escapeHTML(inventory)}</span>
+          ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger vp4-warning" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">!</button>` : ''}
         </div>
-      </div>
-      ${hasDestination ? `<div class="vehicle-popup-destination-compact" title="Дестинация: ${escapeHTML(destination)}" aria-label="Дестинация: ${escapeHTML(destination)}">
-        <span class="vehicle-popup-destination-icon" aria-hidden="true"><img src="./assets/icons/destinationarrow.svg" alt=""></span>
-        <span class="vehicle-popup-destination-copy"><strong>${escapeHTML(destination)}</strong></span>
-      </div>` : ''}
-      ${(hasNextStop || model || speed) ? `<div class="vehicle-popup-metadata">
-        ${hasNextStop ? `<div class="vehicle-popup-metadata-item next-stop" title="Следваща спирка: ${escapeHTML(nextStop)}" aria-label="Следваща спирка: ${escapeHTML(nextStop)}">
-          <span class="vehicle-popup-inline-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M6 4v5a5 5 0 0 0 5 5h7"></path><path d="m14 10 4 4-4 4"></path></svg></span><span class="vehicle-popup-metadata-copy"><strong>${escapeHTML(nextStop)}</strong></span>
+      </header>
+      ${hasDestination ? `<section class="vp4-destination" title="Дестинация: ${escapeHTML(destination)}" aria-label="Дестинация: ${escapeHTML(destination)}">
+        <span class="vp4-destination-icon" aria-hidden="true"><img src="./assets/icons/destinationarrow.svg" alt=""></span>
+        <strong>${escapeHTML(destination)}</strong>
+      </section>` : ''}
+      ${hasNextStop ? `<section class="vp4-next-stop" title="Следваща спирка: ${escapeHTML(nextStop)}" aria-label="Следваща спирка: ${escapeHTML(nextStop)}">
+        <span class="vp4-next-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M6 3.75v5.5a5 5 0 0 0 5 5h7"></path><path d="m14 10.25 4 4-4 4"></path></svg></span>
+        <strong>${escapeHTML(nextStop)}</strong>
+      </section>` : ''}
+      ${(model || speed) ? `<footer class="vp4-details">
+        ${model ? `<div class="vp4-detail vp4-model" title="Марка / модел: ${escapeHTML(model)}" aria-label="Марка / модел: ${escapeHTML(model)}">
+          <span class="vp4-detail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="5" y="3.5" width="14" height="17" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg></span>
+          <strong>${escapeHTML(model)}</strong>
         </div>` : ''}
-        ${model ? `<div class="vehicle-popup-metadata-item model${!speed ? ' secondary-only' : ''}" title="Марка / модел: ${escapeHTML(model)}" aria-label="Марка / модел: ${escapeHTML(model)}">
-          <span class="vehicle-popup-inline-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="5" y="3.5" width="14" height="17" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg></span><span class="vehicle-popup-metadata-copy"><strong>${escapeHTML(model)}</strong></span>
+        ${speed ? `<div class="vp4-detail vp4-speed" title="Скорост: ${escapeHTML(speed)}" aria-label="Скорост: ${escapeHTML(speed)}">
+          <span class="vp4-detail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3.8 18.2a9.5 9.5 0 1 1 16.4 0"></path><path d="M12 13l4.2-4.2"></path><circle cx="12" cy="13" r="1.2"></circle></svg></span>
+          <strong>${escapeHTML(speed)}</strong>
         </div>` : ''}
-        ${speed ? `<div class="vehicle-popup-metadata-item speed${!model ? ' secondary-only' : ''}" title="Скорост: ${escapeHTML(speed)}" aria-label="Скорост ${escapeHTML(speed)}">
-          <span class="vehicle-popup-inline-icon vehicle-popup-speed-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3.8 18.2a9.5 9.5 0 1 1 16.4 0"></path><path d="M12 13l4.2-4.2"></path><circle cx="12" cy="13" r="1.2"></circle></svg></span><span class="vehicle-popup-metadata-copy"><strong>${escapeHTML(speed)}</strong></span>
-        </div>` : ''}
-      </div>` : ''}
-    </div>`;
+      </footer>` : ''}
+    </article>`;
   }
 
   function vehicleMatches(vehicle) {
@@ -1751,7 +1757,7 @@
         }, {
           closeButton: true,
           maxWidth: Math.min(isNarrowViewport ? 272 : 286, availableWidth),
-          minWidth: Math.min(isNarrowViewport ? 220 : 236, availableWidth),
+          minWidth: Math.min(isNarrowViewport ? 220 : 252, availableWidth),
           maxHeight: availableHeight,
           autoPan: true,
           keepInView: true,
