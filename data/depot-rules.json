@@ -1,0 +1,161 @@
+{
+  "source": "Dimitar5555/sofiatraffic-livemap/data/depots.js (inventory rules only)",
+  "source_sha": "872f1a71b9353aea28879c185348ad18b8258bc9",
+  "depots": [
+    {
+      "id": "banishora",
+      "type": "tram",
+      "name": "Банишора",
+      "inv_number_ranges": [
+        [
+          0,
+          999
+        ],
+        [
+          3000,
+          3999
+        ]
+      ]
+    },
+    {
+      "id": "krasna_polyana",
+      "type": "tram",
+      "name": "Красна поляна",
+      "inv_number_ranges": [
+        [
+          2000,
+          2999
+        ]
+      ]
+    },
+    {
+      "id": "krasno_selo",
+      "type": [
+        "tram",
+        "bus"
+      ],
+      "name": "Красно село",
+      "inv_number_ranges": [
+        [
+          2501,
+          2505
+        ]
+      ],
+      "cgm_id_prefix": "TB"
+    },
+    {
+      "id": "iskar_tram",
+      "type": "tram",
+      "name": "Искър",
+      "inv_number_ranges": [
+        [
+          4000,
+          4999
+        ]
+      ]
+    },
+    {
+      "id": "iskar_trolley",
+      "type": [
+        "trolley",
+        "bus"
+      ],
+      "name": "Искър",
+      "inv_number_ranges": [
+        [
+          "trolley",
+          [
+            1000,
+            1999
+          ]
+        ],
+        [
+          "bus",
+          1703
+        ],
+        [
+          "bus",
+          [
+            5000,
+            5037
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "nadezhda",
+      "type": [
+        "trolley",
+        "bus"
+      ],
+      "name": "Надежда",
+      "inv_number_ranges": [
+        [
+          "trolley",
+          [
+            2000,
+            2999
+          ]
+        ],
+        [
+          "bus",
+          [
+            5038,
+            5064
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "levski",
+      "type": "trolley",
+      "name": "Левски",
+      "inv_number_ranges": []
+    },
+    {
+      "id": "zemlyane_bus",
+      "type": "bus",
+      "name": "Земляне",
+      "inv_number_ranges": [
+        [
+          1000,
+          1999
+        ]
+      ]
+    },
+    {
+      "id": "malashevtsi",
+      "type": "bus",
+      "name": "Малашевци",
+      "inv_number_ranges": [
+        [
+          2000,
+          2999
+        ]
+      ],
+      "cgm_id_prefix": "A"
+    },
+    {
+      "id": "druzhba",
+      "type": "bus",
+      "name": "Дружба",
+      "inv_number_ranges": [
+        [
+          3000,
+          3999
+        ]
+      ]
+    },
+    {
+      "id": "mtk",
+      "type": "bus",
+      "name": "МТК",
+      "inv_number_ranges": [
+        [
+          7000,
+          7999
+        ]
+      ]
+    }
+  ]
+}
