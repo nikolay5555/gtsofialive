@@ -700,6 +700,10 @@ body.dark-theme {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.vehicle-line-group {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 118px;
+}
 .vehicle-line-group + .vehicle-line-group {
   margin-top: 7px;
   padding-top: 5px;

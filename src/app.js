@@ -51,6 +51,8 @@
     lastSnapshotAt: null,
     renderFrame: null,
     vehicleAnimationFrame: null,
+    movingVehicles: new Set(),
+    vehicleListSignature: null,
     selectedVehicleId: null,
     selectedVehicleRouteSignature: null,
     toastTimer: null
@@ -464,42 +466,48 @@
   }
 
   function scheduleVehicleAnimation() {
-    if (state.vehicleAnimationFrame !== null || typeof requestAnimationFrame !== 'function') return;
+    if (!state.movingVehicles.size || state.vehicleAnimationFrame !== null ||
+        typeof requestAnimationFrame !== 'function') return;
     state.vehicleAnimationFrame = requestAnimationFrame(animateVehiclePositions);
   }
 
   function animateVehiclePositions() {
     state.vehicleAnimationFrame = null;
     const now = Date.now();
-    let hasMoreMovement = false;
-    for (const vehicle of state.vehicles.values()) {
-      if (!(Number(vehicle.motionDuration) > 0)) continue;
-      // Animate only markers currently rendered on the map. Off-screen/filtered
-      // vehicles snap to their latest coordinates and do not cost a frame loop.
+    for (const id of state.movingVehicles) {
+      const vehicle = state.vehicles.get(String(id));
+      if (!vehicle || !(Number(vehicle.motionDuration) > 0)) {
+        state.movingVehicles.delete(id);
+        continue;
+      }
+
+      // Only animate vehicles that currently have a visible map marker.
+      // Hidden/off-screen vehicles snap to the latest position and leave the
+      // animation set, so idle vehicles never get visited on every frame.
       if (!vehicle.marker || !state.vehicleLayer?.hasLayer(vehicle.marker)) {
         vehicle.displayCoords = [...(vehicle.motionTo || vehicle.coords)];
         vehicle.motionFrom = [...vehicle.displayCoords];
         vehicle.motionDuration = 0;
         if (vehicle.marker) vehicle.marker.setLatLng(vehicle.displayCoords);
+        state.movingVehicles.delete(id);
         continue;
       }
+
       const position = vehicleDisplayCoords(vehicle, now);
       vehicle.displayCoords = position;
-      if (vehicle.marker) {
-        const old = vehicle.marker.getLatLng();
-        if (Math.abs(old.lat - position[0]) > 0.0000001 || Math.abs(old.lng - position[1]) > 0.0000001) {
-          vehicle.marker.setLatLng(position);
-        }
+      const old = vehicle.marker.getLatLng();
+      if (Math.abs(old.lat - position[0]) > 0.0000001 || Math.abs(old.lng - position[1]) > 0.0000001) {
+        vehicle.marker.setLatLng(position);
       }
+
       if (now - Number(vehicle.motionStartedAt || now) >= Number(vehicle.motionDuration)) {
         vehicle.displayCoords = [...(vehicle.motionTo || vehicle.coords)];
         vehicle.motionFrom = [...vehicle.displayCoords];
         vehicle.motionDuration = 0;
-      } else {
-        hasMoreMovement = true;
+        state.movingVehicles.delete(id);
       }
     }
-    if (hasMoreMovement) state.vehicleAnimationFrame = requestAnimationFrame(animateVehiclePositions);
+    if (state.movingVehicles.size) state.vehicleAnimationFrame = requestAnimationFrame(animateVehiclePositions);
   }
 
   function mergeVehicleSnapshot(previous, incoming, now) {
@@ -619,6 +627,8 @@
       : 0;
     merged.displayCoords = merged.motionDuration ? [...visualStart] : [...incoming.coords];
     if (merged.motionDuration === 0) merged.motionFrom = [...incoming.coords];
+    if (merged.motionDuration > 0) state.movingVehicles.add(String(merged.id));
+    else state.movingVehicles.delete(String(merged.id));
 
     if (merged.inventory === null || merged.inventory === undefined || merged.inventory === '') merged.inventory = null;
     if (merged.shortInventory === null || merged.shortInventory === undefined || merged.shortInventory === '') merged.shortInventory = merged.inventory;
@@ -872,11 +882,11 @@
   }
 
   function installVehiclePopupStyles() {
-    if (document.getElementById('gtsofia-popup-v14')) return;
+    if (document.getElementById('gtsofia-popup-v15')) return;
     const style = document.createElement('style');
-    style.id = 'gtsofia-popup-v14';
+    style.id = 'gtsofia-popup-v15';
     style.textContent = `
-      /* v13 — route identity + destination + one quiet metadata rail (no nested cards). */
+      /* v15 — neutral card edge, route identity + destination + compact metadata. */
       .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper {
         padding: 0 !important;
         border: 1px solid #dbe3ed;
@@ -909,7 +919,7 @@
         --popup-ink: #172033;
         display: flex; flex-direction: column; gap: 0; width: 100%; min-width: 0;
         box-sizing: border-box; padding: 12px 12px 10px;
-        border-top: 4px solid var(--line-color, #475569); border-radius: 13px 13px 12px 12px;
+        border-top: 0; border-radius: 13px;
         color: var(--popup-ink); font-family: "Sofia Sans", sans-serif; overflow-wrap: anywhere;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-card-head {
@@ -957,7 +967,7 @@
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact img {
         display: block; width: 23px; height: 23px; flex: 0 0 23px; box-sizing: border-box;
-        padding: 5px; margin: 0; object-fit: contain; border-radius: 7px; background: color-mix(in srgb, var(--line-color, #64748b) 13%, white);
+        padding: 5px; margin: 0; object-fit: contain; border-radius: 7px; background: #f1f5f9;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact strong {
         display: -webkit-box; min-width: 0; color: #111c2f; font-size: 16px; font-weight: 850;
@@ -996,7 +1006,7 @@
       body.dark-theme .gts-vehicle-leaflet-popup .leaflet-popup-close-button:hover { color: #fff !important; background: #1e293b; }
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-card { --popup-ink: #f8fafc; }
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-inventory { border-color: #334155; background: #1e293b; color: #cbd5e1; }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact img { background: color-mix(in srgb, var(--line-color, #64748b) 23%, #111827); }
+      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact img { background: #1e293b; }
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact strong { color: #f8fafc; }
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-metadata { border-top-color: #334155; }
       body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-metadata-item { color: #9eacc0; }
@@ -1052,7 +1062,7 @@
 
   async function loadMapData() {
     try {
-      const response = await fetch('./data/transport-map.json', { cache: 'no-cache' });
+      const response = await fetch('./data/transport-map.json', { cache: 'default' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       state.data = data;
@@ -1076,70 +1086,86 @@
         if (!state.routesByRef.has(ref)) state.routesByRef.set(ref, []);
         state.routesByRef.get(ref).push(route);
       });
-      // Use the exact route metadata source used by the reference GTFS map.
-      // A synchronized local copy remains the fallback if GitHub is unavailable.
-      let routeCatalog = null;
-      try {
-        const remoteCatalogUrl = CONFIG.routeCatalogUrl ||
-          'https://raw.githubusercontent.com/Dimitar5555/sofiatraffic-schedules/master/data/routes.json';
-        const remoteResponse = await fetch(remoteCatalogUrl, { cache: 'no-cache' });
-        if (remoteResponse.ok) {
-          const candidate = await remoteResponse.json();
-          if (Array.isArray(candidate) && candidate.some((item) => item?.cgm_id && item?.route_ref && item?.type)) {
-            routeCatalog = candidate;
+      // Load independent reference files concurrently. Previously each request
+      // waited for the previous one, which stretched the initial loading screen.
+      const remoteCatalogUrl = CONFIG.routeCatalogUrl ||
+        'https://raw.githubusercontent.com/Dimitar5555/sofiatraffic-schedules/master/data/routes.json';
+      const [
+        routeCatalog,
+        compositions,
+        expectedMetadata,
+        stopCatalog
+      ] = await Promise.all([
+        (async () => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2500);
+          try {
+            const remoteResponse = await fetch(remoteCatalogUrl, {
+              cache: 'default',
+              signal: controller.signal
+            });
+            if (remoteResponse.ok) {
+              const candidate = await remoteResponse.json();
+              if (Array.isArray(candidate) && candidate.some((item) => item?.cgm_id && item?.route_ref && item?.type)) {
+                return candidate;
+              }
+            }
+          } catch (error) {
+            console.warn('Не е достъпен онлайн GTFS каталогът; използваме локалното копие.', error);
+          } finally {
+            clearTimeout(timeoutId);
           }
-        }
-      } catch (error) {
-        console.warn('Не е достъпен онлайн GTFS каталогът; използваме локалното копие.', error);
-      }
-      if (!routeCatalog) {
-        const fallbackResponse = await fetch('./data/route-catalog.json', { cache: 'no-cache' });
-        if (!fallbackResponse.ok) throw new Error(`HTTP ${fallbackResponse.status} loading route catalog fallback`);
-        routeCatalog = await fallbackResponse.json();
-      }
+          const fallbackResponse = await fetch('./data/route-catalog.json', { cache: 'default' });
+          if (!fallbackResponse.ok) throw new Error(`HTTP ${fallbackResponse.status} loading route catalog fallback`);
+          return fallbackResponse.json();
+        })(),
+        (async () => {
+          try {
+            const compositionResponse = await fetch('./data/tram-compositions.json', { cache: 'default' });
+            if (!compositionResponse.ok) return [];
+            const candidate = await compositionResponse.json();
+            return Array.isArray(candidate) ? candidate.filter((pair) =>
+              Array.isArray(pair) && pair.length === 2 &&
+              pair.every((number) => Number.isInteger(Number(number)) && Number(number) > 0)
+            ).map((pair) => pair.map(Number)) : [];
+          } catch (error) {
+            console.warn('Не успяхме да заредим справочника за трамвайни композиции.', error);
+            return [];
+          }
+        })(),
+        (async () => {
+          try {
+            const [expectedResponse, depotResponse] = await Promise.all([
+              fetch('./data/expected-models.json', { cache: 'default' }),
+              fetch('./data/depot-rules.json', { cache: 'default' })
+            ]);
+            if (!expectedResponse.ok || !depotResponse.ok) throw new Error('Expected-model metadata is unavailable');
+            const [expectedData, depotData] = await Promise.all([expectedResponse.json(), depotResponse.json()]);
+            if (!Array.isArray(expectedData.rules) || !Array.isArray(depotData.depots)) {
+              throw new Error('Invalid expected-model metadata');
+            }
+            return { rules: expectedData.rules, depots: depotData.depots };
+          } catch (error) {
+            console.warn('Не успяхме да заредим правилата за необичайни превозни средства.', error);
+            return null;
+          }
+        })(),
+        (async () => {
+          const stopCatalogResponse = await fetch('./data/stop-catalog.json', { cache: 'default' });
+          if (!stopCatalogResponse.ok) throw new Error(`HTTP ${stopCatalogResponse.status} loading stop catalog`);
+          return stopCatalogResponse.json();
+        })()
+      ]);
+
       if (!Array.isArray(routeCatalog)) throw new Error('Невалиден GTFS route catalog');
       // The reference live map excludes metro from its route lookup; keep the
       // same ground-transport scope (bus, tram, trolley) here as well.
       state.routesByCgmId = new Map(routeCatalog
         .filter((item) => item?.cgm_id && item?.route_ref && item?.type && String(item.type).toLowerCase() !== 'metro')
         .map((item) => [String(item.cgm_id), item]));
-
-      // Optional enhancement used by the reference GTFS cache to show paired
-      // trams as one vehicle. The main map must still work if this file is unavailable.
-      try {
-        const compositionResponse = await fetch('./data/tram-compositions.json', { cache: 'no-cache' });
-        if (compositionResponse.ok) {
-          const compositions = await compositionResponse.json();
-          if (Array.isArray(compositions)) {
-            state.tramCompositions = compositions.filter((pair) =>
-              Array.isArray(pair) && pair.length === 2 &&
-              pair.every((number) => Number.isInteger(Number(number)) && Number(number) > 0)
-            ).map((pair) => pair.map(Number));
-          }
-        }
-      } catch (error) {
-        console.warn('Не успяхме да заредим справочника за трамвайни композиции.', error);
-      }
-
-      // Optional expected-vehicle metadata from the reference project. If unavailable,
-      // the map stays operational and only the unexpected-vehicle warning is omitted.
-      try {
-        const [expectedResponse, depotResponse] = await Promise.all([
-          fetch('./data/expected-models.json', { cache: 'no-cache' }),
-          fetch('./data/depot-rules.json', { cache: 'no-cache' })
-        ]);
-        if (!expectedResponse.ok || !depotResponse.ok) throw new Error('Expected-model metadata is unavailable');
-        const [expectedData, depotData] = await Promise.all([expectedResponse.json(), depotResponse.json()]);
-        if (!Array.isArray(expectedData.rules) || !Array.isArray(depotData.depots)) {
-          throw new Error('Invalid expected-model metadata');
-        }
-        state.expectedModelRules = expectedData.rules;
-        state.depotRules = depotData.depots;
-      } catch (error) {
-        state.expectedModelRules = [];
-        state.depotRules = [];
-        console.warn('Не успяхме да заредим правилата за необичайни превозни средства.', error);
-      }
+      state.tramCompositions = compositions;
+      state.expectedModelRules = expectedMetadata?.rules || [];
+      state.depotRules = expectedMetadata?.depots || [];
 
       state.stops = (data.stops || []).map((stop) => ({
         id: String(stop.stop_id ?? stop.stop_code ?? ''),
@@ -1155,9 +1181,6 @@
       });
 
       // Use the same Bulgarian stop names as Dimitar's destination-stop lookup.
-      const stopCatalogResponse = await fetch('./data/stop-catalog.json', { cache: 'no-cache' });
-      if (!stopCatalogResponse.ok) throw new Error(`HTTP ${stopCatalogResponse.status} loading stop catalog`);
-      const stopCatalog = await stopCatalogResponse.json();
       for (const item of stopCatalog) {
         if (!item?.code || !item?.name) continue;
         const code = String(item.code);
@@ -1430,7 +1453,7 @@
     const isUnexpected = !isVehicleExpectedOnLine(vehicle);
     const hasDestination = destination && destination !== 'Няма данни за дестинацията';
     const hasNextStop = nextStop && nextStop !== 'Няма данни за следваща спирка';
-    return `<div class="vehicle-popup-card" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
+    return `<div class="vehicle-popup-card">
       <div class="vehicle-popup-card-head">
         <div class="vehicle-popup-route">${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}</div>
         <div class="vehicle-popup-inventory-group">
@@ -1502,12 +1525,15 @@
 
   function updateStats() {
     if (!$('stat-bus') && !$('stat-tram') && !$('stat-trolley')) return;
-    const active = [...state.vehicles.values()].filter((vehicle) =>
-      !vehicle.hidden && isVehicleFresh(vehicle) && isVehicleOnActiveRoute(vehicle)
-    );
-    if ($('stat-bus')) $('stat-bus').textContent = active.filter((vehicle) => vehicle.type === 'bus').length;
-    if ($('stat-tram')) $('stat-tram').textContent = active.filter((vehicle) => vehicle.type === 'tram').length;
-    if ($('stat-trolley')) $('stat-trolley').textContent = active.filter((vehicle) => vehicle.type === 'trolley').length;
+    const counts = { bus: 0, tram: 0, trolley: 0 };
+    const nowSeconds = Date.now() / 1000;
+    for (const vehicle of state.vehicles.values()) {
+      if (vehicle.hidden || !isVehicleFresh(vehicle, nowSeconds) || !isVehicleOnActiveRoute(vehicle)) continue;
+      if (Object.prototype.hasOwnProperty.call(counts, vehicle.type)) counts[vehicle.type] += 1;
+    }
+    if ($('stat-bus')) $('stat-bus').textContent = String(counts.bus);
+    if ($('stat-tram')) $('stat-tram').textContent = String(counts.tram);
+    if ($('stat-trolley')) $('stat-trolley').textContent = String(counts.trolley);
   }
 
   function renderVehicleList() {
@@ -1536,15 +1562,32 @@
         : state.unexpectedOnly
           ? 'Сред текущите позиции няма превозни средства, отбелязани като необичайни.'
           : 'Промени избраната линия или търсенето, или изчисти филтрите.';
+      const signature = `empty|${title}|${description}`;
+      if (signature === state.vehicleListSignature) return;
+      state.vehicleListSignature = signature;
       list.innerHTML = `<div class="empty-state"><strong>${escapeHTML(title)}</strong><p>${escapeHTML(description)}</p></div>`;
       return;
     }
 
+    const listItems = vehicles.map((vehicle) => ({
+      vehicle,
+      inventory: displayInventoryNumber(vehicle.shortInventory || vehicle.inventory),
+      unusual: !isVehicleExpectedOnLine(vehicle)
+    }));
+    // Position/speed-only snapshots do not alter the inventory list. Keep its
+    // existing DOM intact unless a visible row, group or warning state changed.
+    const signature = listItems.map(({ vehicle, inventory, unusual }) =>
+      [vehicle.id, vehicle.type, normaliseRef(vehicle.routeRef), inventory, unusual ? 1 : 0].join('|')
+    ).join('~');
+    if (signature === state.vehicleListSignature) return;
+    state.vehicleListSignature = signature;
+
     const groups = new Map();
-    vehicles.forEach((vehicle) => {
+    listItems.forEach((item) => {
+      const vehicle = item.vehicle;
       const groupKey = `${vehicle.type}::${normaliseRef(vehicle.routeRef)}`;
       if (!groups.has(groupKey)) groups.set(groupKey, { type: vehicle.type, ref: vehicle.routeRef, vehicles: [] });
-      groups.get(groupKey).vehicles.push(vehicle);
+      groups.get(groupKey).vehicles.push(item);
     });
 
     const fragment = document.createDocumentFragment();
@@ -1568,9 +1611,7 @@
 
       const vehicleGrid = document.createElement('div');
       vehicleGrid.className = 'vehicle-line-group-grid';
-      group.vehicles.forEach((vehicle) => {
-        const inventory = displayInventoryNumber(vehicle.shortInventory || vehicle.inventory);
-        const unusual = !isVehicleExpectedOnLine(vehicle);
+      group.vehicles.forEach(({ vehicle, inventory, unusual }) => {
         const row = document.createElement('button');
         row.type = 'button';
         row.className = `vehicle-list-item${unusual ? ' is-unusual' : ''}`;
@@ -1624,8 +1665,6 @@
         vehicle.marker.on('click', () => {
           const currentVehicle = state.vehicles.get(String(id)) || vehicle;
           state.selectedVehicleId = String(id);
-          const targetZoom = Math.max(15, Math.min(state.map.getZoom(), 16));
-          state.map.flyTo(currentVehicle.coords, targetZoom, { duration: .55 });
           renderSelectedVehicleRoute(currentVehicle, true);
         });
         vehicle.marker.on('popupopen', () => {
@@ -1822,6 +1861,8 @@
   function hideComposedTramUnit(vehicle) {
     if (!vehicle) return;
     vehicle.hidden = true;
+    vehicle.motionDuration = 0;
+    state.movingVehicles.delete(String(vehicle.id));
     if (vehicle.marker && state.vehicleLayer?.hasLayer(vehicle.marker)) {
       state.vehicleLayer.removeLayer(vehicle.marker);
     }
@@ -1872,6 +1913,8 @@
       };
       if (existing) Object.assign(existing, combined);
       else state.vehicles.set(compositionId, combined);
+      if (Number(combined.motionDuration) > 0) state.movingVehicles.add(compositionId);
+      else state.movingVehicles.delete(compositionId);
 
       hideComposedTramUnit(first);
       hideComposedTramUnit(second);
@@ -2037,12 +2080,17 @@
       syncLinePickerSelection();
       $('search-input').value = '';
     }
-    updateVehicleMarkers();
-    state.map.flyTo(vehicle.coords, Math.max(state.map.getZoom(), 16), { duration: .6 });
-    setTimeout(() => {
+
+    state.selectedVehicleId = String(id);
+    state.map.panTo(vehicle.coords, { animate: false });
+
+    window.requestAnimationFrame(() => {
       const currentVehicle = state.vehicles.get(String(id));
-      if (currentVehicle?.marker) currentVehicle.marker.openPopup();
-    }, 750);
+      if (!currentVehicle || !isVehicleFresh(currentVehicle)) return;
+      updateVehicleMarkers();
+      if (currentVehicle.marker) currentVehicle.marker.openPopup();
+      renderSelectedVehicleRoute(currentVehicle, true);
+    });
   }
 
   function setTheme(dark) {
