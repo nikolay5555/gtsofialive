@@ -10,7 +10,6 @@
   };
   const MIN_MOVEMENT_METERS = 4;
   const MAX_HEADING_DIFFERENCE = 140;
-  const DEFAULT_STALE_AFTER_MS = 120_000;
 
   function distanceMeters(a, b) {
     if (!Array.isArray(a) || !Array.isArray(b)) return Infinity;
@@ -44,41 +43,14 @@
   }
 
   /**
-   * A vehicle that has timed out starts a new position session. Its next valid
-   * live coordinate must not be compared with old coordinates, timestamps or
-   * heading data, otherwise the normal anti-jitter filters can reject it forever.
-   * Composed tram units are hidden intentionally and are not considered inactive
-   * unless their source timestamp has also expired.
-   */
-  function shouldResetVehiclePosition(previous, now = Date.now(), staleAfterMs = DEFAULT_STALE_AFTER_MS) {
-    if (!previous) return false;
-    if (previous.hidden === true && previous.hiddenReason !== 'composed') return true;
-    const timestamp = Number(previous.timestamp);
-    if (!Number.isFinite(timestamp)) return true;
-    return (now / 1000 - timestamp) > (Number(staleAfterMs) / 1000);
-  }
-
-  /**
    * Checks whether a live position is safe to apply.
    *
    * Older/outlier positions are rejected completely. Tiny GPS drift is accepted
    * as a live update, but the previous coordinates are retained so a stopped
    * vehicle does not visibly shake around one point.
    */
-  function validateVehiclePosition(previous, incoming, now = Date.now(), options = {}) {
+  function validateVehiclePosition(previous, incoming, now = Date.now()) {
     if (!previous || !incoming) return { accept: true, preserveCoords: false };
-
-    const staleAfterMs = Number.isFinite(Number(options.staleAfterMs))
-      ? Number(options.staleAfterMs)
-      : DEFAULT_STALE_AFTER_MS;
-    if (shouldResetVehiclePosition(previous, now, staleAfterMs)) {
-      return {
-        accept: true,
-        preserveCoords: false,
-        resetMotion: true,
-        reason: 'resumed-after-timeout'
-      };
-    }
 
     const previousCoords = previous.coords;
     const incomingCoords = incoming.coords;
@@ -160,7 +132,7 @@
     return { accept: true, preserveCoords: false };
   }
 
-  const api = { distanceMeters, shouldResetVehiclePosition, validateVehiclePosition };
+  const api = { distanceMeters, validateVehiclePosition };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) root.GTSOFIA_VEHICLE_MOTION = api;
 })(typeof window !== 'undefined' ? window : globalThis);
