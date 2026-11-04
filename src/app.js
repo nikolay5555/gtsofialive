@@ -909,7 +909,7 @@
         --popup-ink: #172033;
         display: flex; flex-direction: column; gap: 0; width: 100%; min-width: 0;
         box-sizing: border-box; padding: 12px 12px 10px;
-        border-top: 4px solid var(--line-color, #475569); border-radius: 13px 13px 12px 12px;
+        border-radius: 13px 13px 12px 12px;
         color: var(--popup-ink); font-family: "Sofia Sans", sans-serif; overflow-wrap: anywhere;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-card-head {
@@ -1624,8 +1624,8 @@
         vehicle.marker.on('click', () => {
           const currentVehicle = state.vehicles.get(String(id)) || vehicle;
           state.selectedVehicleId = String(id);
-          const targetZoom = Math.max(15, Math.min(state.map.getZoom(), 16));
-          state.map.flyTo(currentVehicle.coords, targetZoom, { duration: .55 });
+          // The marker is already visible, so avoid changing the map view here.
+          // This prevents a zoom/pan animation from making nearby live markers jitter.
           renderSelectedVehicleRoute(currentVehicle, true);
         });
         vehicle.marker.on('popupopen', () => {
@@ -2037,12 +2037,22 @@
       syncLinePickerSelection();
       $('search-input').value = '';
     }
+
+    state.selectedVehicleId = String(id);
+    renderSelectedVehicleRoute(vehicle, true);
+
+    // Recenter only when choosing from the sidebar. Keep the current zoom and
+    // disable animation so the live markers around the selected vehicle stay calm.
+    state.map.setView(vehicle.coords, state.map.getZoom(), { animate: false });
     updateVehicleMarkers();
-    state.map.flyTo(vehicle.coords, Math.max(state.map.getZoom(), 16), { duration: .6 });
-    setTimeout(() => {
+
+    // setView may bring an off-screen marker into the rendered bounds.
+    requestAnimationFrame(() => {
       const currentVehicle = state.vehicles.get(String(id));
-      if (currentVehicle?.marker) currentVehicle.marker.openPopup();
-    }, 750);
+      if (currentVehicle?.marker && state.vehicleLayer?.hasLayer(currentVehicle.marker)) {
+        currentVehicle.marker.openPopup();
+      }
+    });
   }
 
   function setTheme(dark) {
