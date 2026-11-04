@@ -411,6 +411,7 @@
       coords,
       speed,
       timestamp,
+      positionTimestamp: parsedTimestamp,
       hasSourceTimestamp: parsedTimestamp !== null,
       car: raw.car ?? null,
       destination: String(destinationText ?? '').trim(),
@@ -513,6 +514,7 @@
   function mergeVehicleSnapshot(previous, incoming, now) {
     if (!previous) {
       incoming.timestamp = incoming.timestamp ?? now / 1000;
+      incoming.positionTimestamp = incoming.positionTimestamp ?? incoming.timestamp;
       incoming.bearing = incoming.bearing ?? 0;
       incoming.inventory = incoming.inventory ?? null;
       incoming.shortInventory = incoming.shortInventory ?? incoming.inventory;
@@ -524,8 +526,6 @@
       return incoming;
     }
 
-    const [oldLat, oldLon] = previous.coords;
-    const [newLat, newLon] = incoming.coords;
     let visualStart = previous.displayCoords || vehicleDisplayCoords(previous, now);
     if (previous.marker && state.vehicleLayer?.hasLayer(previous.marker)) {
       try {
@@ -545,7 +545,7 @@
 
     const preserveWhenMissing = [
       'cgmId', 'inventory', 'shortInventory', 'speed', 'timestamp', 'car',
-      'occupancy', 'scheduledTime', 'delay', 'bearing', 'hasSourceTimestamp', 'modelName'
+      'occupancy', 'scheduledTime', 'delay', 'bearing', 'hasSourceTimestamp', 'positionTimestamp', 'modelName'
     ];
     for (const key of preserveWhenMissing) {
       const value = incoming[key];
@@ -613,7 +613,10 @@
     merged.color = vehicleRouteColor(merged);
 
     if (Number(merged.speed) >= MIN_ACTIVE_SPEED) {
-      merged.bearing = oldLat === newLat && oldLon === newLon ? 0 : calculateBearing(previous.coords, incoming.coords);
+      const acceptedMovementMeters = distanceMetersBetween(previous.coords, incoming.coords);
+      merged.bearing = acceptedMovementMeters >= 3
+        ? calculateBearing(previous.coords, incoming.coords)
+        : (hasFinite(incoming.bearing) ? Number(incoming.bearing) : (previous.bearing || 0));
     } else {
       merged.bearing = 0;
     }
@@ -882,11 +885,11 @@
   }
 
   function installVehiclePopupStyles() {
-    if (document.getElementById('gtsofia-popup-v15')) return;
+    if (document.getElementById('gtsofia-popup-v16')) return;
     const style = document.createElement('style');
-    style.id = 'gtsofia-popup-v15';
+    style.id = 'gtsofia-popup-v16';
     style.textContent = `
-      /* v15 — neutral card edge, route identity + destination + compact metadata. */
+      /* v16 — clearer route identity with matched icon/pill sizing. */
       .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper {
         padding: 0 !important;
         border: 1px solid #dbe3ed;
@@ -927,15 +930,25 @@
         padding: 0 18px 9px 0;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-route { display: flex; align-items: center; min-width: 0; flex: 0 0 auto; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity { gap: 4px; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity { gap: 6px; align-items: center; }
       .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon,
-      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img { width: 25px; height: 25px; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon { flex-basis: 25px; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill {
-        width: 39px; min-width: 34px; height: 25px; padding: 0 5px;
-        border-radius: 6px; font-size: 13px;
+      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img {
+        display: block; box-sizing: border-box; width: 30px; height: 30px; object-fit: contain;
       }
-      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill.metro { width: 25px; min-width: 25px; padding: 0; border-radius: 50%; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon {
+        flex: 0 0 30px; line-height: 0;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill {
+        display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+        width: auto; min-width: 42px; height: 30px; padding: 0 9px; flex: 0 0 auto;
+        border: 1px solid rgba(255,255,255,.22); border-radius: 8px;
+        color: var(--line-text-color, #fff); font-size: 15px; font-weight: 850;
+        line-height: 1; letter-spacing: -.015em; font-variant-numeric: tabular-nums; white-space: nowrap;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill.metro {
+        width: 30px; min-width: 30px; height: 30px; padding: 0; border-radius: 50%;
+        font-size: 13px; letter-spacing: 0;
+      }
       .gts-vehicle-leaflet-popup .vehicle-popup-inventory-group { display: flex; align-items: center; gap: 5px; min-width: 0; margin-left: auto; }
       .gts-vehicle-leaflet-popup .vehicle-popup-inventory {
         display: inline-flex; align-items: center; justify-content: center; min-width: 0;
@@ -1018,10 +1031,16 @@
         .gts-vehicle-leaflet-popup .leaflet-popup-content { width: min(254px, calc(100vw - 28px)) !important; max-width: calc(100vw - 28px) !important; }
         .gts-vehicle-leaflet-popup .vehicle-popup-card { padding: 10px 10px 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-card-head { gap: 6px; padding-bottom: 8px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity { gap: 5px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon,
-        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img { width: 23px; height: 23px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon { flex-basis: 23px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill { height: 23px; width: 35px; min-width: 31px; font-size: 12px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img { width: 28px; height: 28px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon { flex-basis: 28px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill {
+          min-width: 39px; height: 28px; padding: 0 8px; font-size: 14px; border-radius: 7px;
+        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill.metro {
+          width: 28px; min-width: 28px; height: 28px; padding: 0; font-size: 12px; border-radius: 50%;
+        }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact { gap: 7px; padding-bottom: 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact img { width: 21px; height: 21px; flex-basis: 21px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact strong { font-size: 14px; }
@@ -1943,6 +1962,17 @@
       if (incoming.hasSourceTimestamp && nowSeconds - incoming.timestamp > STALE_AFTER_SECONDS) {
         continue;
       }
+
+      // Live WebSocket messages can arrive late or contain a one-off GPS
+      // outlier. Never let an older position pull a vehicle back along its
+      // route, and reject jumps/headings that are physically inconsistent.
+      const motionCheck = window.GTSOFIA_VEHICLE_MOTION?.validateVehiclePosition(previous, incoming, now);
+      if (motionCheck && !motionCheck.accept) continue;
+      if (motionCheck?.preserveCoords && previous) {
+        incoming.coords = [...previous.coords];
+        incoming.positionTimestamp = previous.positionTimestamp ?? previous.timestamp ?? null;
+      }
+
       let vehicle = mergeVehicleSnapshot(previous, incoming, now);
       // If the feed omits vehicle mode but the line is known, infer it from the
       // best-matching GTFS direction instead of leaving the marker as "other".
