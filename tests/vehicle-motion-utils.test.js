@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { validateVehiclePosition, distanceMeters } = require('../src/vehicle-motion-utils');
+const { validateVehiclePosition, shouldResetVehiclePosition, distanceMeters } = require('../src/vehicle-motion-utils');
 
 const now = 1_800_000_000_000;
 const base = {
@@ -77,6 +77,54 @@ function atEastMeters(origin, meters) {
   const metro = { ...base, type: 'metro', coords: atEastMeters(base.coords, 90), timestamp: base.timestamp + 2, bearing: 90 };
   const result = validateVehiclePosition(base, metro, now + 2_000);
   assert.equal(result.accept, true);
+}
+
+
+// After the 120-second timeout, the next fresh packet starts a new tracking
+// session and must not be rejected against the previous position or heading.
+{
+  const stale = {
+    ...base,
+    timestamp: base.timestamp - 121,
+    positionTimestamp: base.positionTimestamp - 121,
+    lastSeenAt: now - 121_000,
+    hidden: true,
+    hiddenReason: 'timeout'
+  };
+  const resumed = {
+    ...base,
+    coords: atEastMeters(base.coords, 500),
+    timestamp: base.timestamp + 1,
+    positionTimestamp: base.positionTimestamp + 1,
+    bearing: 270
+  };
+  assert.equal(shouldResetVehiclePosition(stale, now, 120_000), true);
+  const result = validateVehiclePosition(stale, resumed, now, { staleAfterMs: 120_000 });
+  assert.equal(result.accept, true);
+  assert.equal(result.resetMotion, true);
+  assert.equal(result.reason, 'resumed-after-timeout');
+}
+
+// The timeout cleanup may run just before a new packet arrives. Its hidden
+// marker is enough to reset the position session, even at the threshold edge.
+{
+  const hidden = { ...base, hidden: true, hiddenReason: 'timeout' };
+  assert.equal(shouldResetVehiclePosition(hidden, now, 120_000), true);
+  const resumed = { ...base, coords: atEastMeters(base.coords, 350), timestamp: base.timestamp + 1 };
+  const result = validateVehiclePosition(hidden, resumed, now, { staleAfterMs: 120_000 });
+  assert.equal(result.accept, true);
+  assert.equal(result.resetMotion, true);
+}
+
+// Coupled tram wagons are intentionally hidden and must keep normal movement
+// validation while their feed timestamps remain fresh.
+{
+  const composed = { ...base, hidden: true, hiddenReason: 'composed' };
+  assert.equal(shouldResetVehiclePosition(composed, now + 2_000, 120_000), false);
+  const next = { ...base, coords: atEastMeters(base.coords, 20), timestamp: base.timestamp + 2 };
+  const result = validateVehiclePosition(composed, next, now + 2_000, { staleAfterMs: 120_000 });
+  assert.equal(result.accept, true);
+  assert.equal(result.resetMotion, undefined);
 }
 
 assert.ok(distanceMeters(base.coords, atEastMeters(base.coords, 20)) > 19);

@@ -366,9 +366,9 @@ body.dark-theme {
 .vehicle-popup { min-width: 0; width: 210px; max-width: 220px; padding: 0; }
 .vehicle-popup-top { gap: 7px; margin-bottom: 8px; }
 .vehicle-popup-top .line-identity { gap: 4px; }
-.vehicle-popup-top .line-identity-icon, .vehicle-popup-top .line-identity-icon img { width: 25px; height: 25px; }
-.vehicle-popup-top .line-identity-icon { flex-basis: 25px; }
-.vehicle-popup-top .line-identity-pill { height: 25px; width: 42px; padding: 0 6px; font-size: 12px; border-radius: 6px; }
+.vehicle-popup-top .line-identity-icon, .vehicle-popup-top .line-identity-icon img { width: 30px; height: 30px; }
+.vehicle-popup-top .line-identity-icon { flex-basis: 30px; }
+.vehicle-popup-top .line-identity-pill { height: 30px; width: 60px; min-width: 60px; padding: 0; font-size: 17px; border-radius: 8px; box-sizing: border-box; }
 .vehicle-popup-heading { gap: 2px; }
 .vehicle-popup-heading strong { font-size: 12px; line-height: 1.2; }
 .vehicle-popup-heading small { font-size: 10px; }

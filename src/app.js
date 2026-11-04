@@ -511,7 +511,7 @@
     if (state.movingVehicles.size) state.vehicleAnimationFrame = requestAnimationFrame(animateVehiclePositions);
   }
 
-  function mergeVehicleSnapshot(previous, incoming, now) {
+  function mergeVehicleSnapshot(previous, incoming, now, options = {}) {
     if (!previous) {
       incoming.timestamp = incoming.timestamp ?? now / 1000;
       incoming.positionTimestamp = incoming.positionTimestamp ?? incoming.timestamp;
@@ -526,8 +526,11 @@
       return incoming;
     }
 
-    let visualStart = previous.displayCoords || vehicleDisplayCoords(previous, now);
-    if (previous.marker && state.vehicleLayer?.hasLayer(previous.marker)) {
+    const resetMotion = options.resetMotion === true;
+    let visualStart = resetMotion
+      ? [...incoming.coords]
+      : (previous.displayCoords || vehicleDisplayCoords(previous, now));
+    if (!resetMotion && previous.marker && state.vehicleLayer?.hasLayer(previous.marker)) {
       try {
         const current = previous.marker.getLatLng();
         visualStart = [current.lat, current.lng];
@@ -612,7 +615,11 @@
     // #111827 forward merely because one snapshot omitted/emptied its metadata.
     merged.color = vehicleRouteColor(merged);
 
-    if (Number(merged.speed) >= MIN_ACTIVE_SPEED) {
+    if (resetMotion) {
+      // A timed-out vehicle is a new tracking session. Do not derive its course
+      // from the old position; use the fresh feed bearing or wait for movement.
+      merged.bearing = hasFinite(incoming.bearing) ? Number(incoming.bearing) : 0;
+    } else if (Number(merged.speed) >= MIN_ACTIVE_SPEED) {
       const acceptedMovementMeters = distanceMetersBetween(previous.coords, incoming.coords);
       merged.bearing = acceptedMovementMeters >= 3
         ? calculateBearing(previous.coords, incoming.coords)
@@ -621,7 +628,7 @@
       merged.bearing = 0;
     }
 
-    const distance = distanceMetersBetween(visualStart, incoming.coords);
+    const distance = resetMotion ? 0 : distanceMetersBetween(visualStart, incoming.coords);
     merged.motionFrom = [...visualStart];
     merged.motionTo = [...incoming.coords];
     merged.motionStartedAt = now;
@@ -637,6 +644,7 @@
     if (merged.shortInventory === null || merged.shortInventory === undefined || merged.shortInventory === '') merged.shortInventory = merged.inventory;
     merged.marker = previous.marker;
     merged.hidden = false;
+    merged.hiddenReason = null;
     merged.lastSeenAt = now;
     Object.assign(previous, merged);
     return previous;
@@ -885,11 +893,11 @@
   }
 
   function installVehiclePopupStyles() {
-    if (document.getElementById('gtsofia-popup-v16')) return;
+    if (document.getElementById('gtsofia-popup-v17')) return;
     const style = document.createElement('style');
-    style.id = 'gtsofia-popup-v16';
+    style.id = 'gtsofia-popup-v17';
     style.textContent = `
-      /* v16 — clearer route identity with matched icon/pill sizing. */
+      /* v17 — exact 60x30 route pill and 30x30 transport icon sizing. */
       .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper {
         padding: 0 !important;
         border: 1px solid #dbe3ed;
@@ -940,14 +948,14 @@
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill {
         display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
-        width: auto; min-width: 42px; height: 30px; padding: 0 9px; flex: 0 0 auto;
+        width: 60px; min-width: 60px; height: 30px; padding: 0; flex: 0 0 60px;
         border: 1px solid rgba(255,255,255,.22); border-radius: 8px;
-        color: var(--line-text-color, #fff); font-size: 15px; font-weight: 850;
+        color: var(--line-text-color, #fff); font-size: 17px; font-weight: 850;
         line-height: 1; letter-spacing: -.015em; font-variant-numeric: tabular-nums; white-space: nowrap;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill.metro {
-        width: 30px; min-width: 30px; height: 30px; padding: 0; border-radius: 50%;
-        font-size: 13px; letter-spacing: 0;
+        width: 60px; min-width: 60px; height: 30px; padding: 0; flex-basis: 60px;
+        border-radius: 8px; font-size: 17px; letter-spacing: 0;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-inventory-group { display: flex; align-items: center; gap: 5px; min-width: 0; margin-left: auto; }
       .gts-vehicle-leaflet-popup .vehicle-popup-inventory {
@@ -1033,13 +1041,12 @@
         .gts-vehicle-leaflet-popup .vehicle-popup-card-head { gap: 6px; padding-bottom: 8px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity { gap: 5px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon,
-        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img { width: 28px; height: 28px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon { flex-basis: 28px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill {
-          min-width: 39px; height: 28px; padding: 0 8px; font-size: 14px; border-radius: 7px;
-        }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img { width: 30px; height: 30px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon { flex-basis: 30px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill,
         .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill.metro {
-          width: 28px; min-width: 28px; height: 28px; padding: 0; font-size: 12px; border-radius: 50%;
+          width: 60px; min-width: 60px; height: 30px; padding: 0; flex-basis: 60px;
+          font-size: 17px; border-radius: 8px;
         }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact { gap: 7px; padding-bottom: 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact img { width: 21px; height: 21px; flex-basis: 21px; }
@@ -1880,6 +1887,7 @@
   function hideComposedTramUnit(vehicle) {
     if (!vehicle) return;
     vehicle.hidden = true;
+    vehicle.hiddenReason = 'composed';
     vehicle.motionDuration = 0;
     state.movingVehicles.delete(String(vehicle.id));
     if (vehicle.marker && state.vehicleLayer?.hasLayer(vehicle.marker)) {
@@ -1902,8 +1910,8 @@
 
       // In GTFS mode the first wagon is sufficient, matching the reference app.
       if (!first) {
-        if (second) second.hidden = false;
-        if (existing) existing.hidden = true;
+        if (second) { second.hidden = false; second.hiddenReason = null; }
+        if (existing) { existing.hidden = true; existing.hiddenReason = 'composition-unavailable'; }
         continue;
       }
 
@@ -1915,6 +1923,7 @@
         inventory: compositionRef,
         shortInventory: compositionRef,
         hidden: false,
+        hiddenReason: null,
         marker,
         raw: {
           ...(first.raw || {}),
@@ -1966,14 +1975,16 @@
       // Live WebSocket messages can arrive late or contain a one-off GPS
       // outlier. Never let an older position pull a vehicle back along its
       // route, and reject jumps/headings that are physically inconsistent.
-      const motionCheck = window.GTSOFIA_VEHICLE_MOTION?.validateVehiclePosition(previous, incoming, now);
+      const motionCheck = window.GTSOFIA_VEHICLE_MOTION?.validateVehiclePosition(
+        previous, incoming, now, { staleAfterMs: STALE_AFTER }
+      );
       if (motionCheck && !motionCheck.accept) continue;
       if (motionCheck?.preserveCoords && previous) {
         incoming.coords = [...previous.coords];
         incoming.positionTimestamp = previous.positionTimestamp ?? previous.timestamp ?? null;
       }
 
-      let vehicle = mergeVehicleSnapshot(previous, incoming, now);
+      let vehicle = mergeVehicleSnapshot(previous, incoming, now, { resetMotion: motionCheck?.resetMotion });
       // If the feed omits vehicle mode but the line is known, infer it from the
       // best-matching GTFS direction instead of leaving the marker as "other".
       if (vehicle.type === 'other' && vehicle.normalizedRef && state.data) {
@@ -2001,6 +2012,7 @@
         const wasVisible = !vehicle.hidden;
         vehicle.marker = null;
         vehicle.hidden = true;
+        vehicle.hiddenReason = !isVehicleFresh(vehicle, nowSeconds) ? 'timeout' : 'inactive-route';
         if (wasVisible && String(state.selectedVehicleId) === String(id)) {
           state.selectedVehicleId = null;
           clearSelectedVehicleRoute();
@@ -2321,6 +2333,7 @@
         if (vehicle.marker && state.vehicleLayer?.hasLayer(vehicle.marker)) state.vehicleLayer.removeLayer(vehicle.marker);
         vehicle.marker = null;
         vehicle.hidden = true;
+        vehicle.hiddenReason = 'timeout';
         if (String(state.selectedVehicleId) === String(id)) {
           state.selectedVehicleId = null;
           clearSelectedVehicleRoute();
