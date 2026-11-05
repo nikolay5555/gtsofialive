@@ -896,13 +896,7 @@
         box-sizing: border-box;
         font-family: "Sofia Sans", sans-serif;
       }
-      .gts-vehicle-leaflet-popup .leaflet-popup-close-button {
-        z-index: 4; top: 5px !important; right: 5px !important;
-        width: 23px !important; height: 23px !important; border-radius: 50%;
-        color: #64748b !important; font-size: 18px !important; line-height: 22px !important;
-        text-align: center;
-      }
-      .gts-vehicle-leaflet-popup .leaflet-popup-close-button:hover { color: #0f172a !important; background: #edf2f7; }
+      .gts-vehicle-leaflet-popup .leaflet-popup-close-button { display: none !important; }
       .gts-vehicle-leaflet-popup .vehicle-popup-card {
         --popup-ink: #172033;
         display: flex; flex-direction: column; gap: 0; width: 100%; min-width: 0;
@@ -911,22 +905,38 @@
         color: var(--popup-ink); font-family: "Sofia Sans", sans-serif; overflow-wrap: anywhere;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-card-head {
-        position: relative; display: flex; align-items: center; gap: 8px; min-width: 0;
-        width: 100%; box-sizing: border-box; padding: 0 0 9px;
+        display: flex; align-items: center; min-width: 0; width: 100%; box-sizing: border-box; padding: 0 0 7px;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-identity {
-        display: flex; align-items: center; width: 100%; min-width: 0; max-width: 100%;
-        box-sizing: border-box; padding: 9px 38px 9px 10px; border-radius: 8px; background: var(--vehicle-type-color, #475569);
+        display: flex; align-items: center; justify-content: flex-start; gap: 6px;
+        width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
+        padding: 9px 10px; border-radius: 8px; background: var(--vehicle-type-color, #475569);
         color: #fff; font-size: 13px; font-weight: 800; line-height: 1.25;
         overflow-wrap: anywhere; font-variant-numeric: tabular-nums;
       }
+      .gts-vehicle-leaflet-popup .vehicle-popup-identity-icon {
+        display: inline-block; flex: 0 0 19px; width: 19px; height: 19px; object-fit: contain;
+        filter: brightness(0) invert(1); vertical-align: middle;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-identity-line { font-weight: 700; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-actions {
+        display: flex; align-items: center; justify-content: flex-end; gap: 7px;
+        min-height: 27px; width: 100%; padding: 0 0 8px; box-sizing: border-box;
+      }
       .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger {
-        position: absolute; z-index: 2; top: 50%; right: 27px; transform: translateY(-50%);
-        display: inline-grid; place-items: center; flex: 0 0 22px; width: 22px; height: 22px;
+        position: relative; display: inline-grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px;
         margin: 0; padding: 0; border: 1px solid #edcb58; border-radius: 7px; background: #fff0ad;
         color: #805b08; font: inherit; font-size: 12px; font-weight: 900; line-height: 1; cursor: help;
         -webkit-tap-highlight-color: transparent;
       }
+      .gts-vehicle-leaflet-popup .vehicle-popup-close-trigger {
+        display: inline-grid; place-items: center; width: 24px; height: 24px; flex: 0 0 24px;
+        margin: 0; padding: 0; border: 1px solid #d5dde7; border-radius: 7px;
+        background: #f1f5f9; color: #475569; font: inherit; font-size: 18px; line-height: 1;
+        cursor: pointer; -webkit-tap-highlight-color: transparent;
+      }
+      .gts-vehicle-leaflet-popup .vehicle-popup-close-trigger:hover { background: #e2e8f0; color: #0f172a; }
+      .gts-vehicle-leaflet-popup .vehicle-popup-close-trigger:focus-visible { outline: 2px solid #64748b; outline-offset: 2px; }
       .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger::after {
         content: attr(data-tooltip); position: absolute; top: calc(100% + 7px); right: 0; z-index: 2000;
         width: max-content; max-width: min(220px, calc(100vw - 48px)); padding: 7px 9px;
@@ -980,8 +990,10 @@
       @media (max-width: 480px) {
         .gts-vehicle-leaflet-popup .leaflet-popup-content { width: min(254px, calc(100vw - 28px)) !important; max-width: calc(100vw - 28px) !important; }
         .gts-vehicle-leaflet-popup .vehicle-popup-card { padding: 10px 10px 9px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-card-head { gap: 6px; padding-bottom: 8px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-identity { padding: 8px 36px 8px 8px; font-size: 12px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-card-head { padding-bottom: 6px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-identity { gap: 5px; padding: 8px; font-size: 12px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-identity-icon { width: 18px; height: 18px; flex-basis: 18px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-actions { padding-bottom: 7px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact { gap: 7px; padding-bottom: 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact img { width: 21px; height: 21px; flex-basis: 21px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact strong { font-size: 14px; }
@@ -1396,10 +1408,18 @@
     const isUnexpected = !isVehicleExpectedOnLine(vehicle);
     const hasDestination = destination && destination !== 'Няма данни за дестинацията';
     const hasNextStop = nextStop && nextStop !== 'Няма данни за следваща спирка';
+    const vehicleTypeColor = TYPE_COLORS[vehicle.type] || TYPE_COLORS.other;
     return `<div class="vehicle-popup-card" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
       <div class="vehicle-popup-card-head">
-        <div class="vehicle-popup-identity" style="--vehicle-type-color:${escapeHTML(getVehicleColor(vehicle))}">${escapeHTML(inventory)} на линия ${escapeHTML(line)}</div>
+        <div class="vehicle-popup-identity" style="--vehicle-type-color:${escapeHTML(vehicleTypeColor)}">
+          <span>${escapeHTML(inventory)}</span><span>на</span>
+          <img class="vehicle-popup-identity-icon" src="${escapeHTML(transportIconPath(vehicle.type, line))}" alt="" aria-hidden="true">
+          <span class="vehicle-popup-identity-line">${escapeHTML(line)}</span>
+        </div>
+      </div>
+      <div class="vehicle-popup-actions">
         ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">⚠</button>` : ''}
+        <button type="button" class="vehicle-popup-close-trigger" aria-label="Затвори балончето" title="Затвори">×</button>
       </div>
       ${hasDestination ? `<div class="vehicle-popup-destination-compact" title="Дестинация">
         <img src="./assets/icons/destinationarrow.svg" alt="" aria-hidden="true">
@@ -2114,6 +2134,13 @@
     // Capture clicks before Leaflet stops popup events, allowing the warning tooltip
     // to toggle on touch devices as well as by mouse hover or keyboard focus.
     document.addEventListener('click', (event) => {
+      const closeTrigger = event.target.closest('.vehicle-popup-close-trigger');
+      if (closeTrigger) {
+        event.preventDefault();
+        event.stopPropagation();
+        state.map?.closePopup();
+        return;
+      }
       const trigger = event.target.closest('.vehicle-unexpected-warning-trigger');
       const openWarnings = document.querySelectorAll('.vehicle-unexpected-warning-trigger[aria-expanded="true"]');
       if (!trigger) {
