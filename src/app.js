@@ -919,10 +919,6 @@
         vertical-align: middle;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-identity-line { font-weight: 700; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-actions {
-        display: flex; align-items: center; justify-content: flex-end; gap: 7px;
-        min-height: 27px; width: 100%; padding: 0 0 8px; box-sizing: border-box;
-      }
       .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger {
         position: relative; display: inline-grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px;
         margin: 0; padding: 0; border: 1px solid #edcb58; border-radius: 7px; background: #fff0ad;
@@ -930,7 +926,7 @@
         -webkit-tap-highlight-color: transparent;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-close-trigger {
-        display: inline-grid; place-items: center; width: 24px; height: 24px; flex: 0 0 24px;
+        display: inline-grid; place-items: center; width: 24px; height: 24px; flex: 0 0 24px; margin-left: auto;
         margin: 0; padding: 0; border: 1px solid #d5dde7; border-radius: 7px;
         background: #f1f5f9; color: #475569; font: inherit; font-size: 18px; line-height: 1;
         cursor: pointer; -webkit-tap-highlight-color: transparent;
@@ -1405,21 +1401,17 @@
       : '';
     const model = cleanValue(vehicle.modelName);
     const inventory = displayInventoryNumber(vehicle.inventory || vehicle.shortInventory);
-    const isUnexpected = !isVehicleExpectedOnLine(vehicle);
     const hasDestination = destination && destination !== 'Няма данни за дестинацията';
     const hasNextStop = nextStop && nextStop !== 'Няма данни за следваща спирка';
     const isNightBus = vehicle.type === 'bus' && /^N/i.test(line);
     const vehicleTypeColor = isNightBus ? getVehicleColor(vehicle) : (TYPE_COLORS[vehicle.type] || TYPE_COLORS.other);
     return `<div class="vehicle-popup-card" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
-      <div class="vehicle-popup-actions">
-        <button type="button" class="vehicle-popup-close-trigger" aria-label="Затвори балончето" title="Затвори">×</button>
-        ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">⚠</button>` : ''}
-      </div>
       <div class="vehicle-popup-card-head">
         <div class="vehicle-popup-identity" style="--vehicle-type-color:${escapeHTML(vehicleTypeColor)}">
           <span>${escapeHTML(inventory)}</span><span>на</span>
           <img class="vehicle-popup-identity-icon" src="${escapeHTML(transportIconPath(vehicle.type, line))}" alt="" aria-hidden="true">
           <span class="vehicle-popup-identity-line">${escapeHTML(line)}</span>
+          <button type="button" class="vehicle-popup-close-trigger" aria-label="Затвори балончето" title="Затвори">×</button>
         </div>
       </div>
       ${hasDestination ? `<div class="vehicle-popup-destination-compact" title="Дестинация">
