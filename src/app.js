@@ -1408,18 +1408,19 @@
     const isUnexpected = !isVehicleExpectedOnLine(vehicle);
     const hasDestination = destination && destination !== 'Няма данни за дестинацията';
     const hasNextStop = nextStop && nextStop !== 'Няма данни за следваща спирка';
-    const vehicleTypeColor = TYPE_COLORS[vehicle.type] || TYPE_COLORS.other;
+    const isNightBus = vehicle.type === 'bus' && /^N/i.test(line);
+    const vehicleTypeColor = isNightBus ? getVehicleColor(vehicle) : (TYPE_COLORS[vehicle.type] || TYPE_COLORS.other);
     return `<div class="vehicle-popup-card" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
+      <div class="vehicle-popup-actions">
+        <button type="button" class="vehicle-popup-close-trigger" aria-label="Затвори балончето" title="Затвори">×</button>
+        ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">⚠</button>` : ''}
+      </div>
       <div class="vehicle-popup-card-head">
         <div class="vehicle-popup-identity" style="--vehicle-type-color:${escapeHTML(vehicleTypeColor)}">
           <span>${escapeHTML(inventory)}</span><span>на</span>
           <img class="vehicle-popup-identity-icon" src="${escapeHTML(transportIconPath(vehicle.type, line))}" alt="" aria-hidden="true">
           <span class="vehicle-popup-identity-line">${escapeHTML(line)}</span>
         </div>
-      </div>
-      <div class="vehicle-popup-actions">
-        <button type="button" class="vehicle-popup-close-trigger" aria-label="Затвори балончето" title="Затвори">×</button>
-        ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">⚠</button>` : ''}
       </div>
       ${hasDestination ? `<div class="vehicle-popup-destination-compact" title="Дестинация">
         <img src="./assets/icons/destinationarrow.svg" alt="" aria-hidden="true">
