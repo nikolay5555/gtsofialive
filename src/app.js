@@ -926,8 +926,8 @@
         -webkit-tap-highlight-color: transparent;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-close-trigger {
-        display: inline-grid; place-items: center; width: 24px; height: 24px; flex: 0 0 24px; margin-left: auto;
-        margin: 0; padding: 0; border: 1px solid #d5dde7; border-radius: 7px;
+        display: inline-grid; place-items: center; width: 24px; height: 24px; flex: 0 0 24px;
+        margin: 0 0 0 auto; padding: 0; border: 1px solid #d5dde7; border-radius: 7px;
         background: #f1f5f9; color: #475569; font: inherit; font-size: 18px; line-height: 1;
         cursor: pointer; -webkit-tap-highlight-color: transparent;
       }
