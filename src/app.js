@@ -911,17 +911,18 @@
         color: var(--popup-ink); font-family: "Sofia Sans", sans-serif; overflow-wrap: anywhere;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-card-head {
-        display: flex; align-items: center; gap: 8px; min-width: 0;
-        padding: 0 18px 9px 0;
+        position: relative; display: flex; align-items: center; gap: 8px; min-width: 0;
+        width: 100%; box-sizing: border-box; padding: 0 0 9px;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-identity {
-        display: inline-flex; align-items: center; min-width: 0; max-width: 100%;
-        padding: 7px 10px; border-radius: 8px; background: var(--vehicle-type-color, #475569);
+        display: flex; align-items: center; width: 100%; min-width: 0; max-width: 100%;
+        box-sizing: border-box; padding: 9px 38px 9px 10px; border-radius: 8px; background: var(--vehicle-type-color, #475569);
         color: #fff; font-size: 13px; font-weight: 800; line-height: 1.25;
         overflow-wrap: anywhere; font-variant-numeric: tabular-nums;
       }
       .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger {
-        position: relative; display: inline-grid; place-items: center; flex: 0 0 22px; width: 22px; height: 22px;
+        position: absolute; z-index: 2; top: 50%; right: 27px; transform: translateY(-50%);
+        display: inline-grid; place-items: center; flex: 0 0 22px; width: 22px; height: 22px;
         margin: 0; padding: 0; border: 1px solid #edcb58; border-radius: 7px; background: #fff0ad;
         color: #805b08; font: inherit; font-size: 12px; font-weight: 900; line-height: 1; cursor: help;
         -webkit-tap-highlight-color: transparent;
@@ -980,7 +981,7 @@
         .gts-vehicle-leaflet-popup .leaflet-popup-content { width: min(254px, calc(100vw - 28px)) !important; max-width: calc(100vw - 28px) !important; }
         .gts-vehicle-leaflet-popup .vehicle-popup-card { padding: 10px 10px 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-card-head { gap: 6px; padding-bottom: 8px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-identity { padding: 6px 8px; font-size: 12px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-identity { padding: 8px 36px 8px 8px; font-size: 12px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact { gap: 7px; padding-bottom: 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact img { width: 21px; height: 21px; flex-basis: 21px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact strong { font-size: 14px; }
@@ -1395,10 +1396,9 @@
     const isUnexpected = !isVehicleExpectedOnLine(vehicle);
     const hasDestination = destination && destination !== 'Няма данни за дестинацията';
     const hasNextStop = nextStop && nextStop !== 'Няма данни за следваща спирка';
-    const vehicleTypeName = TYPE_NAMES[vehicle.type] || TYPE_NAMES.other;
     return `<div class="vehicle-popup-card" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
       <div class="vehicle-popup-card-head">
-        <div class="vehicle-popup-identity" style="--vehicle-type-color:${escapeHTML(getVehicleColor(vehicle))}">${escapeHTML(vehicleTypeName)} ${escapeHTML(inventory)} на линия ${escapeHTML(line)}</div>
+        <div class="vehicle-popup-identity" style="--vehicle-type-color:${escapeHTML(getVehicleColor(vehicle))}">${escapeHTML(inventory)} на линия ${escapeHTML(line)}</div>
         ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">⚠</button>` : ''}
       </div>
       ${hasDestination ? `<div class="vehicle-popup-destination-compact" title="Дестинация">
