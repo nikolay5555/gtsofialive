@@ -916,7 +916,7 @@
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-identity-icon {
         display: inline-block; flex: 0 0 19px; width: 19px; height: 19px; object-fit: contain;
-        filter: brightness(0) invert(1); vertical-align: middle;
+        vertical-align: middle;
       }
       .gts-vehicle-leaflet-popup .vehicle-popup-identity-line { font-weight: 700; }
       .gts-vehicle-leaflet-popup .vehicle-popup-actions {
@@ -1418,8 +1418,8 @@
         </div>
       </div>
       <div class="vehicle-popup-actions">
-        ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">⚠</button>` : ''}
         <button type="button" class="vehicle-popup-close-trigger" aria-label="Затвори балончето" title="Затвори">×</button>
+        ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">⚠</button>` : ''}
       </div>
       ${hasDestination ? `<div class="vehicle-popup-destination-compact" title="Дестинация">
         <img src="./assets/icons/destinationarrow.svg" alt="" aria-hidden="true">
