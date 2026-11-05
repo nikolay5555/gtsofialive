@@ -8,15 +8,13 @@
   const STALE_AFTER_SECONDS = STALE_AFTER / 1000;
   const RECONNECT_DELAY = CONFIG.reconnectDelayMs || 2500;
   const MIN_ACTIVE_SPEED = Number(CONFIG.minActiveSpeed) || 3;
-  const TYPE_NAMES = { bus: 'Автобус', tram: 'Трамвай', trolley: 'Тролей', metro: 'Метро', other: 'Транспорт' };
-  const TYPE_COLORS = { bus: '#BE1E2D', tram: '#F7941D', trolley: '#27AAE1', metro: '#1C75BC', other: '#111827' };
+  const TYPE_NAMES = { bus: 'Автобус', tram: 'Трамвай', trolley: 'Тролейбус', other: 'Транспорт' };
+  const TYPE_COLORS = { bus: '#BE1E2D', tram: '#F7941D', trolley: '#27AAE1', other: '#111827' };
   const METRO_LINE_COLORS = { M1: '#EB2227', M2: '#1C75BC', M3: '#39B54A', M4: '#FFDE17' };
 
   const state = {
     map: null,
     lightTiles: null,
-    darkTiles: null,
-    activeTiles: null,
     routeLayer: null,
     selectedVehicleRouteLayer: null,
     stopLayer: null,
@@ -916,24 +914,12 @@
         display: flex; align-items: center; gap: 8px; min-width: 0;
         padding: 0 18px 9px 0;
       }
-      .gts-vehicle-leaflet-popup .vehicle-popup-route { display: flex; align-items: center; min-width: 0; flex: 0 0 auto; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity { gap: 4px; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon,
-      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img { width: 25px; height: 25px; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon { flex-basis: 25px; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill {
-        width: 39px; min-width: 34px; height: 25px; padding: 0 5px;
-        border-radius: 6px; font-size: 13px;
+      .gts-vehicle-leaflet-popup .vehicle-popup-identity {
+        display: inline-flex; align-items: center; min-width: 0; max-width: 100%;
+        padding: 7px 10px; border-radius: 8px; background: var(--vehicle-type-color, #475569);
+        color: #fff; font-size: 13px; font-weight: 800; line-height: 1.25;
+        overflow-wrap: anywhere; font-variant-numeric: tabular-nums;
       }
-      .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill.metro { width: 25px; min-width: 25px; padding: 0; border-radius: 50%; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-inventory-group { display: flex; align-items: center; gap: 5px; min-width: 0; margin-left: auto; }
-      .gts-vehicle-leaflet-popup .vehicle-popup-inventory {
-        display: inline-flex; align-items: center; justify-content: center; min-width: 0;
-        min-height: 22px; padding: 2px 7px; border: 1px solid #e1e7ef; border-radius: 6px;
-        color: #526176; background: #f6f8fb; font-size: 10px; font-weight: 800;
-        line-height: 1.1; white-space: nowrap; font-variant-numeric: tabular-nums;
-      }
-      .gts-vehicle-leaflet-popup .vehicle-popup-inventory strong { font: inherit; color: inherit; }
       .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger {
         position: relative; display: inline-grid; place-items: center; flex: 0 0 22px; width: 22px; height: 22px;
         margin: 0; padding: 0; border: 1px solid #edcb58; border-radius: 7px; background: #fff0ad;
@@ -990,28 +976,11 @@
       .gts-vehicle-leaflet-popup .vehicle-popup-metadata-item.next-stop { flex: 1 1 100%; max-width: 100%; }
       .gts-vehicle-leaflet-popup .vehicle-popup-metadata-item.next-stop strong { max-width: 225px; }
       .gts-vehicle-leaflet-popup .vehicle-popup-metadata-item.speed strong { white-space: nowrap; }
-      body.dark-theme .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper { border-color: #334155; background: #111827; }
-      body.dark-theme .gts-vehicle-leaflet-popup .leaflet-popup-content-wrapper::after { border-top-color: #111827; }
-      body.dark-theme .gts-vehicle-leaflet-popup .leaflet-popup-close-button { color: #cbd5e1 !important; }
-      body.dark-theme .gts-vehicle-leaflet-popup .leaflet-popup-close-button:hover { color: #fff !important; background: #1e293b; }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-card { --popup-ink: #f8fafc; }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-inventory { border-color: #334155; background: #1e293b; color: #cbd5e1; }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact img { background: color-mix(in srgb, var(--line-color, #64748b) 23%, #111827); }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact strong { color: #f8fafc; }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-metadata { border-top-color: #334155; }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-metadata-item { color: #9eacc0; }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-metadata-item .vehicle-popup-inline-icon { color: #9eacc0; }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-popup-metadata-item strong { color: #dce5f0; }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger { border-color: #7d6726; background: #554519; color: #fde68a; }
-      body.dark-theme .gts-vehicle-leaflet-popup .vehicle-unexpected-warning-trigger::after { border-color: #7d6726; background: #3b3218; color: #fde68a; box-shadow: 0 6px 16px rgba(0, 0, 0, .35); }
       @media (max-width: 480px) {
         .gts-vehicle-leaflet-popup .leaflet-popup-content { width: min(254px, calc(100vw - 28px)) !important; max-width: calc(100vw - 28px) !important; }
         .gts-vehicle-leaflet-popup .vehicle-popup-card { padding: 10px 10px 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-card-head { gap: 6px; padding-bottom: 8px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon,
-        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon img { width: 23px; height: 23px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-icon { flex-basis: 23px; }
-        .gts-vehicle-leaflet-popup .vehicle-popup-route .line-identity-pill { height: 23px; width: 35px; min-width: 31px; font-size: 12px; }
+        .gts-vehicle-leaflet-popup .vehicle-popup-identity { padding: 6px 8px; font-size: 12px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact { gap: 7px; padding-bottom: 9px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact img { width: 21px; height: 21px; flex-basis: 21px; }
         .gts-vehicle-leaflet-popup .vehicle-popup-destination-compact strong { font-size: 14px; }
@@ -1033,11 +1002,7 @@
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     });
-    state.darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd', maxZoom: 20,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-    });
-    state.activeTiles = state.lightTiles.addTo(state.map);
+    state.lightTiles.addTo(state.map);
     L.control.zoom({ position: 'topright' }).addTo(state.map);
     state.routeLayer = L.layerGroup().addTo(state.map);
     state.stopLayer = L.layerGroup().addTo(state.map);
@@ -1430,13 +1395,11 @@
     const isUnexpected = !isVehicleExpectedOnLine(vehicle);
     const hasDestination = destination && destination !== 'Няма данни за дестинацията';
     const hasNextStop = nextStop && nextStop !== 'Няма данни за следваща спирка';
+    const vehicleTypeName = TYPE_NAMES[vehicle.type] || TYPE_NAMES.other;
     return `<div class="vehicle-popup-card" style="--line-color:${escapeHTML(getVehicleColor(vehicle))}">
       <div class="vehicle-popup-card-head">
-        <div class="vehicle-popup-route">${lineIdentityMarkup(line, vehicle.type, getVehicleColor(vehicle))}</div>
-        <div class="vehicle-popup-inventory-group">
-          <div class="vehicle-popup-inventory" title="Инвентарен номер" aria-label="Инвентарен номер ${escapeHTML(inventory)}"><strong>${escapeHTML(inventory)}</strong></div>
-          ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">⚠</button>` : ''}
-        </div>
+        <div class="vehicle-popup-identity" style="--vehicle-type-color:${escapeHTML(getVehicleColor(vehicle))}">${escapeHTML(vehicleTypeName)} ${escapeHTML(inventory)} на линия ${escapeHTML(line)}</div>
+        ${isUnexpected ? `<button type="button" class="vehicle-unexpected-warning-trigger" data-tooltip="Необичайно превозно средство" aria-label="Необичайно превозно средство" aria-expanded="false">⚠</button>` : ''}
       </div>
       ${hasDestination ? `<div class="vehicle-popup-destination-compact" title="Дестинация">
         <img src="./assets/icons/destinationarrow.svg" alt="" aria-hidden="true">
@@ -2055,15 +2018,6 @@
     });
   }
 
-  function setTheme(dark) {
-    document.body.classList.toggle('dark-theme', dark);
-    $('theme-toggle').textContent = dark ? 'Включи светла тема' : 'Включи тъмна тема';
-    if (state.map && state.activeTiles) {
-      state.map.removeLayer(state.activeTiles);
-      state.activeTiles = dark ? state.darkTiles : state.lightTiles;
-      state.activeTiles.addTo(state.map);
-    }
-  }
 
   function bindUI() {
     $('search-input')?.addEventListener('input', (event) => {
@@ -2227,7 +2181,6 @@
       const panel = $('settings-panel');
       if (panel) panel.hidden = !panel.hidden;
     });
-    $('theme-toggle')?.addEventListener('click', () => setTheme(!document.body.classList.contains('dark-theme')));
     $('locate-button')?.addEventListener('click', locateUser);
     $('reset-map-button')?.addEventListener('click', () => state.map?.flyTo(SOFIA_CENTER, SOFIA_ZOOM, { duration: .5 }));
     document.addEventListener('keydown', (event) => {
